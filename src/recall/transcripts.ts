@@ -88,7 +88,11 @@ export const cursorProjectKey = (workspacePath: string): string =>
     .replace(/^[/\\]+/, '')
     .replace(/[/\\.:\s]+/g, '-')
 
-export function listTranscriptFiles(projectsDir: string, projectKey?: string): string[] {
+export function listTranscriptFiles(
+  projectsDir: string,
+  projectKey?: string,
+  excludeId?: string,
+): string[] {
   if (!fs.existsSync(projectsDir)) return []
   const projects = projectKey
     ? [projectKey]
@@ -101,7 +105,7 @@ export function listTranscriptFiles(projectsDir: string, projectKey?: string): s
     const transcriptsDir = path.join(projectsDir, project, 'agent-transcripts')
     if (!fs.existsSync(transcriptsDir)) continue
     for (const entry of fs.readdirSync(transcriptsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory() || entry.name === excludeId) continue
       const filePath = path.join(transcriptsDir, entry.name, `${entry.name}.jsonl`)
       if (fs.existsSync(filePath)) files.push(filePath)
     }

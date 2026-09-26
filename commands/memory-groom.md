@@ -3,8 +3,9 @@ Cursor Memory: groom always-loaded memory to fewer tokens without losing what ma
 Grooming is a plan first, then small moves. Follow the "Grooming core memory" section of the `cursor-memory` skill.
 
 1. Measure. Run `cursor-memory status` and `cursor-memory doctor` in this workspace. Note the `system/` token total and the largest files. If the human named a file, groom only that one.
-2. Read each target file whole with `cursor-memory read <path>`. Do not skim.
-3. Draft a plan, section by section. Give every section exactly one verdict:
+   If they named none, do not read or plan every file. List each loaded file with its token estimate and its headings; recommend the one file to groom first and why; then stop and ask which file. Continue from step 2 with the file they choose.
+2. Read the target file whole with `cursor-memory read <path>`. Do not skim.
+3. Draft a plan, section by section; if the file has no headings, group its rules by topic and treat each group as a section. Give every section exactly one verdict:
    - keep in core: a rule that must shape every chat, stated in one line;
    - move to reference: detail, history, examples, or rules that matter only for some tasks; name the target `reference/...` file and the one-line pointer that stays in core;
    - merge: the same rule stated in more than one place; name the single place it will live;

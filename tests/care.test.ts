@@ -177,6 +177,38 @@ describe('doctor and palace', () => {
     assert.ok(has('ok', 'core size', /loads ~\d+ tokens/))
   })
 
+  test('doctor flags shared wording, not files that merely share a language', () => {
+    const memoryRoot = tempMemory()
+    const words = (seed: string) =>
+      Array.from({ length: 60 }, (_, index) => `${seed}${index}`).join(' ')
+    const shared = words('deploy')
+    writeMemory('reference/deploy.md', shared, { memoryRoot, description: 'Deploy.' })
+    writeMemory('reference/deploy-copy.md', `${shared} ${words('extra')}`, {
+      memoryRoot,
+      description: 'Copy.',
+    })
+    writeMemory(
+      'reference/css.md',
+      'The stylesheet uses kebab-case class names and keeps every color in a semantic token so the dark theme can swap them without touching the components that read those tokens at runtime.',
+      { memoryRoot, description: 'CSS.' },
+    )
+    writeMemory(
+      'reference/db.md',
+      'The database runs migrations in a single transaction and the team reviews each schema change before it reaches production because a failed rollback once left the orders table locked for an hour.',
+      { memoryRoot, description: 'DB.' },
+    )
+
+    const details = runDoctor({ memoryRoot, cursorHome: tempDir(), projectSlug: 'x' })
+      .filter((f) => f.check === 'duplicates')
+      .map((f) => f.detail)
+    assert.ok(
+      details.some((d) =>
+        /of reference\/deploy\.md is worded the same as reference\/deploy-copy\.md/.test(d),
+      ),
+    )
+    assert.ok(!details.some((d) => /css\.md.*db\.md|db\.md.*css\.md/.test(d)))
+  })
+
   test('palace embeds files and history as safe JSON in one private HTML file', () => {
     const memoryRoot = tempMemory()
     writeMemory('reference/html.md', 'Contains </script><b>tags</b>.', {

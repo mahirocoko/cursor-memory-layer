@@ -280,7 +280,11 @@ function main(argv: string[]): void {
     case 'recall': {
       const projectKey = values.project ? cursorProjectKey(workspace) : undefined
       const dreamKey = cursorProjectKey(getDreamWorkspace())
-      const transcripts = listTranscriptFiles(getCursorProjectsDir(), projectKey)
+      const transcripts = listTranscriptFiles(
+        getCursorProjectsDir(),
+        projectKey,
+        process.env.CURSOR_CONVERSATION_ID,
+      )
         .filter(
           (file) => path.basename(path.dirname(path.dirname(path.dirname(file)))) !== dreamKey,
         )

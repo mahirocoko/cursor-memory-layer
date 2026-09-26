@@ -129,4 +129,4 @@ Zero runtime dependencies; TypeScript runs through Node's `--experimental-strip-
 - Not verified in the Cursor IDE, or with automatic (non-`/compact`) compaction.
 - The `preCompact` notice ("reflecting in the background") did not appear in the CLI during testing.
 - Reflector transcripts accumulate under `~/.cursor/projects/<dream workspace>/`; `recall` skips them.
-- `recall` run from inside a chat can match that same chat.
+- `recall` skips the chat it runs in only when `CURSOR_CONVERSATION_ID` is set; Cursor's sandboxed shell may unset it.

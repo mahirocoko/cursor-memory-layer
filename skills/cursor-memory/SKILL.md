@@ -109,7 +109,7 @@ Grooming lowers the tokens every chat pays for without losing a rule that matter
 - Each section gets one verdict: keep, move (to a named file), merge (into a named place), or drop (quote the evidence that it is stale or contradicted).
 - Show the plan with before and after token estimates and the exact lines to drop, then wait for the human in the chat.
 - Move first, cut second: write the `reference/` file with the moved lines verbatim, then shrink core. The CLI refuses a `system/` edit that loses three or more lines that exist nowhere else in memory; `--drop "<line>"` names a line the human agreed to remove and is recorded in the commit message.
-- Groom one file per pass, and report the commit shas so any step can be reverted.
+- Groom one file per pass, and report the commit shas so any step can be reverted. Without a named file, start with an overview of every loaded file, recommend one, and ask before reading any file whole.
 
 ## History and backups
 

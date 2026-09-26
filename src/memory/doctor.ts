@@ -11,7 +11,6 @@ import { resolveAgentCommand } from '../dream/runner.ts'
 import { isBackedOff, isDreamLocked, readDreamLog, readDreamState } from '../dream/state.ts'
 import { type HooksConfig, isOwnedHook } from '../install/hooks-config.ts'
 import { isOwnedStatusLine, readCliConfig } from '../install/statusline-config.ts'
-import { buildVectorProfile, cosineSimilarity } from '../recall/rank.ts'
 import {
   estimateTokens,
   SYSTEM_DOCUMENT_WARN_CHARS,
@@ -40,8 +39,9 @@ export type DoctorFinding = { level: DoctorLevel; check: string; detail: string 
 
 const EXPECTED_HOOKS = ['sessionStart', 'sessionEnd', 'stop', 'preCompact', 'preToolUse']
 const DUPLICATE_LINE_MIN_CHARS = 24
-const SIMILAR_FILE_THRESHOLD = 0.85
-const SIMILAR_FILE_MIN_CHARS = 200
+const SHINGLE_WORDS = 5
+const SHARED_WORDING_THRESHOLD = 0.5
+const SHARED_WORDING_MIN_SHINGLES = 30
 const PATH_REFERENCE = /\b(?:system|reference|projects|skills)\/[\w./-]+\.md\b/g
 
 type LoadedFile = { relativePath: string; content: string; body: string; tier: string }
@@ -52,6 +52,14 @@ const normalizeLine = (line: string): string =>
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
+
+const shingles = (text: string): Set<string> => {
+  const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []
+  const result = new Set<string>()
+  for (let index = 0; index + SHINGLE_WORDS <= words.length; index++)
+    result.add(words.slice(index, index + SHINGLE_WORDS).join(' '))
+  return result
+}
 
 function loadFiles(memoryRoot: string, findings: DoctorFinding[]): LoadedFile[] {
   const loaded: LoadedFile[] = []
@@ -141,16 +149,22 @@ function checkOrganization(files: LoadedFile[], findings: DoctorFinding[]) {
   }
 
   const profiles = candidates
-    .filter((file) => file.body.length >= SIMILAR_FILE_MIN_CHARS)
-    .map((file) => ({ file, profile: buildVectorProfile(file.body) }))
+    .map((file) => ({ file, phrases: shingles(file.body) }))
+    .filter(({ phrases }) => phrases.size >= SHARED_WORDING_MIN_SHINGLES)
   for (let left = 0; left < profiles.length; left++) {
     for (let right = left + 1; right < profiles.length; right++) {
-      const score = cosineSimilarity(profiles[left].profile, profiles[right].profile)
-      if (score >= SIMILAR_FILE_THRESHOLD) {
+      const [smaller, larger] =
+        profiles[left].phrases.size <= profiles[right].phrases.size
+          ? [profiles[left], profiles[right]]
+          : [profiles[right], profiles[left]]
+      let shared = 0
+      for (const phrase of smaller.phrases) if (larger.phrases.has(phrase)) shared++
+      const score = shared / smaller.phrases.size
+      if (score >= SHARED_WORDING_THRESHOLD) {
         findings.push({
           level: 'warn',
           check: 'duplicates',
-          detail: `${profiles[left].file.relativePath} and ${profiles[right].file.relativePath} are ${Math.round(score * 100)}% similar; consider merging.`,
+          detail: `${Math.round(score * 100)}% of ${smaller.file.relativePath} is worded the same as ${larger.file.relativePath}; consider merging.`,
         })
       }
     }

@@ -184,6 +184,7 @@ describe('recall', () => {
 
     assert.equal(listTranscriptFiles(projectsDir).length, 2)
     assert.equal(listTranscriptFiles(projectsDir, project).length, 1)
+    assert.equal(listTranscriptFiles(projectsDir, project, 'chat-deploy').length, 0)
     const transcripts = listTranscriptFiles(projectsDir).map((file) => readTranscript(file))
     const hits = rankTranscripts(
       transcripts.filter((transcript) => transcript !== null),
