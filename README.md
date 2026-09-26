@@ -15,7 +15,7 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 | `preToolUse` hook | Asks the human before destructive `git` or `rm -r` commands against the memory repo. |
 | `recall` | Searches past Cursor chat transcripts. |
 | Status line | `statusline/statusline.mjs`: folder, git, session, and context, plus memory state: `🧠✓` clean, `🧠+N` uncommitted files, `🧠…` reflecting, `🧠!` last reflection failed, `↻N` reflections committed today. |
-| Slash commands | `/memory-doctor`, `/memory-dream`, `/memory-palace`, `/memory-recall` in `~/.cursor/commands/`. |
+| Slash commands | In `~/.cursor/commands/`: `/memory` (what is loaded), `/memory-init` (onboard a repo, like Letta's `/init`), `/memory-doctor [symptom]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, `/memory-palace`. New chats in a project with no memory suggest `/memory-init`. |
 
 ### Memory layout
 

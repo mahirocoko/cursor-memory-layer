@@ -80,7 +80,10 @@ describe('install: status line and commands', () => {
     assert.deepEqual(report.commands.map((file) => path.basename(file)).sort(), [
       'memory-doctor.md',
       'memory-dream.md',
+      'memory-init.md',
       'memory-recall.md',
+      'memory-skill.md',
+      'memory.md',
     ])
     assert.equal(fs.readFileSync(foreign, 'utf-8'), '# someone else\n')
     assert.ok(report.notes.some((note) => note.includes('memory-palace.md')))

@@ -167,6 +167,7 @@ const renderContract = (projection: MemoryProjection): string => {
     '- `cursor-memory replace <path> --old "..." --new "..."`, `append`, `move`, `delete`, `log`, `revert <sha>`',
     '- `cursor-memory search <terms>` for memory, `cursor-memory recall <terms>` for past Cursor chats',
     '- `cursor-memory doctor` audits memory; `dream` reflects on this chat now (it also runs in the background)',
+    '- The human can run `/memory`, `/memory-init`, `/memory-doctor`, `/memory-dream`, `/memory-recall`, `/memory-skill`, and `/memory-palace`',
     `- Paths: \`system/\` (always loaded), \`projects/${projection.projectSlug}/system/\` (this project), \`reference/\` and \`projects/${projection.projectSlug}/reference/\` (on demand), \`skills/<name>/SKILL.md\` (procedures you wrote for yourself), \`archives/\` (never loaded)`,
     '',
   ].join('\n')
@@ -188,6 +189,28 @@ const renderLastReflection = (projection: MemoryProjection): string => {
   const subject = entry.subject.slice(REFLECTION_COMMIT_PREFIX.length).trim()
   return `## Last reflection\n${entry.date.slice(0, 10)} ${entry.sha.slice(0, 8)}: ${subject}. Background reflection updates memory between chats; \`cursor-memory revert <sha>\` undoes it.\n`
 }
+
+const SEED_ONLY_LINE = /^- (?:Workspace: .*|\(.*\))$/
+
+/** True when the project has no memory beyond the `cursor-memory init` seed. */
+export function isProjectMemoryEmpty(projection: MemoryProjection): boolean {
+  const prefix = `projects/${projection.projectSlug}/`
+  if (projection.references.some((document) => document.relativePath.startsWith(prefix))) {
+    return false
+  }
+  return projection.projectSystem.every((document) =>
+    document.body
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .every((line) => SEED_ONLY_LINE.test(line)),
+  )
+}
+
+const renderProjectHint = (projection: MemoryProjection): string =>
+  projection.repository.state === 'uninitialized' || !isProjectMemoryEmpty(projection)
+    ? ''
+    : `## Project memory\nNothing is recorded for "${projection.projectSlug}" yet. Once real work starts here, suggest \`/memory-init\` to capture its overview and conventions; do not run it unasked.\n`
 
 const renderSystemDocument = (document: MemoryDocument): string =>
   `## ${document.relativePath}\n_${document.description}_${document.readOnly ? ' (read-only)' : ''}\n\n${document.body}\n`
@@ -220,6 +243,8 @@ export function renderCommittedMemoryProjection(projection: MemoryProjection): s
     if (document !== persona) sections.push(renderSystemDocument(document))
   }
   for (const document of projection.projectSystem) sections.push(renderSystemDocument(document))
+  const projectHint = renderProjectHint(projection)
+  if (projectHint) sections.push(projectHint)
 
   const referenceIndex = renderReferenceIndex(projection)
   if (referenceIndex) sections.push(referenceIndex)

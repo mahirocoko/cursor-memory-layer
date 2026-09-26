@@ -65,6 +65,28 @@ describe('projection', () => {
     assert.match(rendered, /Uncommitted memory is not active/)
   })
 
+  test('suggests /memory-init until the project has more than the init seed', () => {
+    const root = path.join(tempDir(), 'memory')
+    initMemory(root, { slug: 'fresh', workspacePath: '/tmp/fresh' })
+    const hint = /## Project memory\nNothing is recorded for "fresh" yet[\s\S]*\/memory-init/
+    const render = (slug: string) =>
+      renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, slug))
+    assert.match(render('fresh'), hint)
+    assert.match(render('unseeded'), /Nothing is recorded for "unseeded" yet/)
+
+    writeMemory('projects/fresh/reference/deploy.md', 'Deploys on tags.', {
+      memoryRoot: root,
+      description: 'Deploys.',
+    })
+    assert.doesNotMatch(render('fresh'), /## Project memory/)
+
+    writeMemory('projects/unseeded/system/overview.md', '- Uses pnpm.', {
+      memoryRoot: root,
+      description: 'Unseeded.',
+    })
+    assert.doesNotMatch(render('unseeded'), /## Project memory/)
+  })
+
   test('excludes malformed committed files and reports them', () => {
     const root = tempMemory()
     fs.writeFileSync(path.join(root, 'system', 'bad.md'), 'no frontmatter')

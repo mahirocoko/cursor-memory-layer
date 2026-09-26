@@ -1,6 +1,6 @@
 ---
 name: cursor-memory
-description: Maintain your own persistent, git-backed memory across Cursor chats (Letta-style). Use when the human states a durable preference, corrects you, tells you a stable fact about themselves or a project, says "remember", "from now on", or "จำไว้", when you need something from past chats, when memory looks stale or contradictory, or when asked about memory reflection, doctor, palace, skills, backups, or mirroring.
+description: Maintain your own persistent, git-backed memory across Cursor chats (Letta-style). Use when the human states a durable preference, corrects you, tells you a stable fact about themselves or a project, says "remember", "from now on", or "จำไว้", when you need something from past chats, when memory looks stale or contradictory, when onboarding a repository into memory, saving a reusable procedure as a skill, or when asked about memory reflection, doctor, palace, skills, backups, or mirroring.
 ---
 
 # Cursor Memory
@@ -55,6 +55,30 @@ cursor-memory skills                       # list memory skills
 ```
 
 Every write is a path-scoped commit and becomes active in the next chat. A file marked `read_only: true` needs the human's approval and `--force`. New chats list your memory skills; when one matches the task, `cursor-memory read` it and follow it.
+
+The human can run these slash commands: `/memory` (what is loaded), `/memory-init` (onboard this repo), `/memory-doctor [symptom]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, and `/memory-palace`.
+
+## Onboarding a project
+
+Like Letta's `/init`: when a project has no memory yet (new chats then show a "Project memory" notice), capture what every future chat in it should know. Do it when the human runs `/memory-init` or agrees to your suggestion, not on your own.
+
+- Read, do not edit: README, `AGENTS.md` and rules files, package manifests and lockfiles, scripts, lint/format/test config, CI workflows, top-level layout and entry points, `.env.example` (names only, never values).
+- `projects/<slug>/system/overview.md`: what the project is, its stack and versions, the top-level layout, and entry points.
+- `projects/<slug>/system/conventions.md`: the package manager and the dev, test, lint, typecheck, and build commands exactly as the repo defines them; conventions and gotchas the repo documents.
+- Record only what files show. If something is unclear, leave it out or ask; never guess a command. Do not record what is missing ("no CI yet"); absences go stale.
+- `AGENTS.md` and rules already load in every chat, so point to them ("Repo rules: `AGENTS.md`") instead of copying them.
+- Keep the two files together under about 1,500 characters. Put longer detail in `projects/<slug>/reference/<topic>.md` with a description that says when to read it.
+- Show the drafts with the source file of each point, and write them only after the human agrees. Writing `overview.md` replaces the `cursor-memory init` seed.
+
+## Writing a memory skill
+
+A memory skill is a procedure you worked out and want to repeat, like a Letta skill in MemFS. Save one when the human runs `/memory-skill` or agrees to your suggestion after a multi-step task succeeded.
+
+- Check `cursor-memory skills` first and update a matching skill rather than adding a near-duplicate.
+- Path `skills/<name>/SKILL.md`, `<name>` lowercase with hyphens. The `name` frontmatter is filled in for you.
+- The description says when to use it ("Use when cutting a release of this repo"), not what it is.
+- The body: numbered steps with the exact commands that worked, how to verify the result, and the pitfalls you hit. Scripts can sit beside it as `skills/<name>/<file>`.
+- Never include secrets or one-off values; use placeholders.
 
 ## Background reflection (dream)
 
