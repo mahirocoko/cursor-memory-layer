@@ -14,10 +14,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && node --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"tests/*.test.ts\"",
-    "check": "tsc --noEmit && biome check src tests scripts",
-    "lint": "biome lint src tests scripts",
-    "format": "biome format --write src tests scripts",
-    "fix": "biome check --write src tests scripts",
+    "check": "tsc --noEmit && biome check src tests scripts statusline",
+    "lint": "biome lint src tests scripts statusline",
+    "format": "biome format --write src tests scripts statusline",
+    "fix": "biome check --write src tests scripts statusline",
     "memory:install": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/install.ts",
     "memory:uninstall": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/uninstall.ts"
   },

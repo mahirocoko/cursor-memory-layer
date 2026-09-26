@@ -10,6 +10,7 @@ const report = install({
   memoryRoot: getMemoryRoot(),
   nodePath: process.execPath,
   binDir: process.env.CURSOR_MEMORY_BIN_DIR || path.join(os.homedir(), '.local', 'bin'),
+  statusLine: !process.argv.includes('--no-statusline'),
 })
 
 console.log(
@@ -21,6 +22,10 @@ console.log(
   `Hooks: ${report.hooksFile}${report.hooksBackup ? ` (backup: ${report.hooksBackup})` : ''}`,
 )
 console.log(`Skill: ${report.skillFile}`)
+console.log(
+  `Commands: ${report.commands.map((file) => `/${path.basename(file, '.md')}`).join(', ')}`,
+)
+if (report.statusLine === 'installed') console.log('Status line: cli-config.json statusLine')
 if (report.binLink) console.log(`CLI: ${report.binLink}`)
 for (const note of report.notes) console.log(`Note: ${note}`)
 console.log('Open a new Cursor chat to load memory.')

@@ -10,6 +10,7 @@ import * as path from 'node:path'
 import { resolveAgentCommand } from '../dream/runner.ts'
 import { isBackedOff, isDreamLocked, readDreamLog, readDreamState } from '../dream/state.ts'
 import { type HooksConfig, isOwnedHook } from '../install/hooks-config.ts'
+import { isOwnedStatusLine, readCliConfig } from '../install/statusline-config.ts'
 import { buildVectorProfile, cosineSimilarity } from '../recall/rank.ts'
 import { ACTIVE_MEMORY_BUDGET_TOKENS, estimateTokens, SYSTEM_DOCUMENT_MAX_CHARS } from './config.ts'
 import { parseMemoryDocument } from './document.ts'
@@ -245,6 +246,17 @@ function checkInstall(memoryRoot: string, cursorHome: string, findings: DoctorFi
       detail: 'The cursor-memory skill is not installed.',
     })
   }
+  let statusLine: unknown
+  try {
+    statusLine = readCliConfig(cursorHome)?.statusLine
+  } catch {}
+  findings.push({
+    level: 'ok',
+    check: 'install',
+    detail: isOwnedStatusLine(statusLine)
+      ? 'The CLI status line shows memory state (🧠).'
+      : 'The CLI status line is not ours (optional; `pnpm memory:install` sets it).',
+  })
   const remote = getRemoteStatus(memoryRoot)
   const lastPush = remote.recentLog.at(-1)
   findings.push({

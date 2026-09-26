@@ -14,6 +14,8 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 | `stop`, `preCompact`, `sessionEnd` hooks | Start a detached reflection after about 25 assistant replies, before context compaction, and when a chat with at least 4 new user messages ends. |
 | `preToolUse` hook | Asks the human before destructive `git` or `rm -r` commands against the memory repo. |
 | `recall` | Searches past Cursor chat transcripts. |
+| Status line | `statusline/statusline.mjs`: folder, git, session, and context, plus memory state: `🧠✓` clean, `🧠+N` uncommitted files, `🧠…` reflecting, `🧠!` last reflection failed, `↻N` reflections committed today. |
+| Slash commands | `/memory-doctor`, `/memory-dream`, `/memory-palace`, `/memory-recall` in `~/.cursor/commands/`. |
 
 ### Memory layout
 
@@ -52,9 +54,19 @@ pnpm install
 pnpm memory:install
 ```
 
-This creates `~/.cursor/memory` if missing, merges the hooks into `~/.cursor/hooks.json` (other hooks are kept; the previous file is saved as `hooks.json.cursor-memory.bak`), copies the skill to `~/.cursor/skills/cursor-memory/`, and links the CLI into `~/.local/bin` (override with `CURSOR_MEMORY_BIN_DIR`). Open a new chat to load memory.
+This:
 
-`pnpm memory:uninstall` removes the hooks, skill, and CLI link and keeps the memory repo.
+- creates `~/.cursor/memory` if missing;
+- merges the hooks into `~/.cursor/hooks.json` (other hooks are kept; the previous file is saved as `hooks.json.cursor-memory.bak`);
+- copies the skill to `~/.cursor/skills/cursor-memory/` and the slash commands to `~/.cursor/commands/` (an existing command file that is not ours is left alone);
+- sets `statusLine` in `~/.cursor/cli-config.json` and nothing else there, saving the previous value to `cli-config.statusline.pre-cursor-memory.json`. It never creates `cli-config.json`; run `cursor-agent` once first. Skip with `pnpm memory:install --no-statusline`;
+- links the CLI into `~/.local/bin` (override with `CURSOR_MEMORY_BIN_DIR`).
+
+Open a new chat to load memory; restart running CLI sessions to pick up new commands.
+
+With `approvalMode: allowlist`, the agent asks before every `cursor-memory` command. Add `Shell(cursor-memory)` to `permissions.allow` in `cli-config.json` to let it read and edit memory on its own, as in Letta.
+
+`pnpm memory:uninstall` removes the hooks, skill, commands, and CLI link, restores the previous status line, and keeps the memory repo.
 
 ## Commands
 
@@ -117,3 +129,4 @@ Zero runtime dependencies; TypeScript runs through Node's `--experimental-strip-
 - Not verified in the Cursor IDE, or with automatic (non-`/compact`) compaction.
 - The `preCompact` notice ("reflecting in the background") did not appear in the CLI during testing.
 - Reflector transcripts accumulate under `~/.cursor/projects/<dream workspace>/`; `recall` skips them.
+- `recall` run from inside a chat can match that same chat.

@@ -7,6 +7,7 @@ import {
   mergeOwnedHooks,
   removeOwnedHooks,
 } from './hooks-config.ts'
+import { buildStatusLine, installStatusLine, uninstallStatusLine } from './statusline-config.ts'
 
 export type InstallOptions = {
   repoRoot: string
@@ -14,6 +15,8 @@ export type InstallOptions = {
   memoryRoot: string
   nodePath: string
   binDir: string | null
+  /** Point the CLI status line at statusline/statusline.mjs. Default true. */
+  statusLine?: boolean
 }
 
 export type InstallReport = {
@@ -21,9 +24,26 @@ export type InstallReport = {
   hooksFile: string
   hooksBackup: string | null
   skillFile: string
+  commands: string[]
+  statusLine: 'installed' | 'no-cli-config' | 'disabled'
   binLink: string | null
   notes: string[]
 }
+
+/** The CLI shows a command's first line as its description, so ownership is a trailing comment. */
+const COMMAND_MARKER = '<!-- installed by cursor-memory-layer -->'
+
+const ownedCommands = (options: Pick<InstallOptions, 'repoRoot' | 'cursorHome'>) => {
+  const sourceDir = path.join(options.repoRoot, 'commands')
+  const targetDir = path.join(options.cursorHome, 'commands')
+  return fs
+    .readdirSync(sourceDir)
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => ({ source: path.join(sourceDir, name), target: path.join(targetDir, name) }))
+}
+
+const isOwnedCommandFile = (file: string): boolean =>
+  fs.existsSync(file) && fs.readFileSync(file, 'utf-8').includes(COMMAND_MARKER)
 
 const readHooksConfig = (hooksFile: string): HooksConfig => {
   if (!fs.existsSync(hooksFile)) return { version: 1, hooks: {} }
@@ -76,6 +96,32 @@ export function install(options: InstallOptions): InstallReport {
   fs.mkdirSync(path.dirname(skill.target), { recursive: true })
   fs.copyFileSync(skill.source, skill.target)
 
+  const commands: string[] = []
+  for (const command of ownedCommands(options)) {
+    if (fs.existsSync(command.target) && !isOwnedCommandFile(command.target)) {
+      notes.push(`${command.target} already exists and is not ours; left it alone.`)
+      continue
+    }
+    fs.mkdirSync(path.dirname(command.target), { recursive: true })
+    fs.copyFileSync(command.source, command.target)
+    commands.push(command.target)
+  }
+
+  let statusLine: InstallReport['statusLine'] = 'disabled'
+  if (options.statusLine !== false) {
+    statusLine = installStatusLine(
+      options.cursorHome,
+      buildStatusLine(options.repoRoot, options.nodePath),
+    )
+      ? 'installed'
+      : 'no-cli-config'
+    if (statusLine === 'no-cli-config') {
+      notes.push(
+        'No cli-config.json yet; run cursor-agent once, then install again for the status line.',
+      )
+    }
+  }
+
   let binLink: string | null = null
   if (options.binDir && fs.existsSync(options.binDir)) {
     const link = path.join(options.binDir, 'cursor-memory')
@@ -93,7 +139,16 @@ export function install(options: InstallOptions): InstallReport {
     notes.push(`Add ${path.dirname(binTarget(options.repoRoot))} to PATH to use cursor-memory.`)
   }
 
-  return { memory, hooksFile, hooksBackup, skillFile: skill.target, binLink, notes }
+  return {
+    memory,
+    hooksFile,
+    hooksBackup,
+    skillFile: skill.target,
+    commands,
+    statusLine,
+    binLink,
+    notes,
+  }
 }
 
 export function uninstall(options: InstallOptions): string[] {
@@ -109,6 +164,14 @@ export function uninstall(options: InstallOptions): string[] {
   if (fs.existsSync(skillDir)) {
     fs.rmSync(skillDir, { recursive: true })
     actions.push(`Removed ${skillDir}.`)
+  }
+  for (const command of ownedCommands(options)) {
+    if (!isOwnedCommandFile(command.target)) continue
+    fs.rmSync(command.target)
+    actions.push(`Removed ${command.target}.`)
+  }
+  if (uninstallStatusLine(options.cursorHome)) {
+    actions.push('Restored the previous CLI status line.')
   }
   if (options.binDir) {
     const link = path.join(options.binDir, 'cursor-memory')
