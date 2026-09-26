@@ -1,0 +1,31 @@
+{
+  "name": "cursor-memory-layer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Letta-style, Git-backed memory for Cursor agents",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "cursor-memory": "bin/cursor-memory"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --noEmit && node --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"tests/*.test.ts\"",
+    "check": "tsc --noEmit && biome check src tests scripts",
+    "lint": "biome lint src tests scripts",
+    "format": "biome format --write src tests scripts",
+    "fix": "biome check --write src tests scripts",
+    "memory:install": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/install.ts",
+    "memory:uninstall": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/uninstall.ts"
+  },
+  "author": "Mahiro",
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "2.5.9",
+    "@types/node": "26.2.0",
+    "typescript": "5.8.2"
+  }
+}
