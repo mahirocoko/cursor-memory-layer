@@ -15,13 +15,13 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 | `preToolUse` hook | Asks the human before destructive `git` or `rm -r` commands against the memory repo. |
 | `recall` | Searches past Cursor chat transcripts. |
 | Status line | `statusline/statusline.mjs`: folder, git, session, and context, plus memory state: `🧠✓` clean, `🧠+N` uncommitted files, `🧠…` reflecting, `🧠!` last reflection failed, `↻N` reflections committed today. |
-| Slash commands | In `~/.cursor/commands/`: `/memory` (what is loaded), `/memory-init` (onboard a repo, like Letta's `/init`), `/memory-doctor [symptom]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, `/memory-palace`. New chats in a project with no memory suggest `/memory-init`. |
+| Slash commands | In `~/.cursor/commands/`: `/memory` (what is loaded), `/memory-init` (onboard a repo, like Letta's `/init`), `/memory-doctor [symptom]`, `/memory-groom [file]` (plan, approve, then shrink core without losing lines), `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, `/memory-palace`. New chats in a project with no memory suggest `/memory-init`. |
 
 ### Memory layout
 
 ```
-system/                     loaded into every chat (keep short: ~1,400 tokens total)
-  human/preferences.md      how the human wants to work
+system/                     loaded into every chat (Letta-style core; doctor warns past ~32,000 tokens)
+  human/prefs/              communication.md, coding.md, workflow.md
   human/identity.md         facts the human shared about themselves
   persona.md
 projects/<slug>/system/     loaded into every chat in that project
@@ -72,7 +72,7 @@ With `approvalMode: allowlist`, the agent asks before every `cursor-memory` comm
 
 ```bash
 cursor-memory show                    # exactly what a new chat receives here
-cursor-memory write system/human/preferences.md --body "- Replies in Thai."
+cursor-memory append system/human/prefs/communication.md --body "- Replies in Thai."
 cursor-memory search pnpm
 cursor-memory recall "deploy wrangler" --project
 cursor-memory log --limit 10

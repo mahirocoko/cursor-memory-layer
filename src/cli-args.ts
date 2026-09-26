@@ -12,6 +12,7 @@ const VALUE_OPTIONS = new Set([
   '--model',
   '--out',
   '--from',
+  '--drop',
 ])
 
 /**

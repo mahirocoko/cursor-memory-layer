@@ -6,6 +6,7 @@
  * JSON operations that the harness validates and commits.
  */
 
+import { DREAM_SYSTEM_GROWTH_MAX_CHARS } from '../memory/config.ts'
 import { parseMemoryDocument } from '../memory/document.ts'
 import { listCommittedMemoryFiles, readCommittedMemoryFile } from '../memory/repository.ts'
 import { isSkillEntryPath, requiresFrontmatter } from '../memory/scope.ts'
@@ -13,6 +14,8 @@ import type { TranscriptMessage } from '../recall/transcripts.ts'
 
 export type DreamOperation =
   | { op: 'write'; path: string; description?: string; body: string }
+  | { op: 'replace'; path: string; old: string; new: string }
+  | { op: 'append'; path: string; description?: string; body: string }
   | { op: 'delete'; path: string }
 
 export type DreamResponse = {
@@ -21,7 +24,7 @@ export type DreamResponse = {
 }
 
 export const MAX_DREAM_OPERATIONS = 8
-const SNAPSHOT_MAX_CHARS = 40_000
+const SNAPSHOT_MAX_CHARS = 160_000
 const TRANSCRIPT_MAX_CHARS = 60_000
 const USER_MESSAGE_MAX_CHARS = 4_000
 const ASSISTANT_MESSAGE_MAX_CHARS = 1_500
@@ -32,8 +35,8 @@ const clip = (text: string, max: number): string =>
 export function buildMemorySnapshot(memoryRoot: string, projectSlug: string): string {
   const all = listCommittedMemoryFiles(memoryRoot, '')
   const inlineOrder = [
-    (file: string) => file.startsWith('system/'),
     (file: string) => file.startsWith(`projects/${projectSlug}/system/`),
+    (file: string) => file.startsWith('system/'),
     (file: string) => file.startsWith(`projects/${projectSlug}/reference/`),
     (file: string) => isSkillEntryPath(file),
     (file: string) => file.startsWith('reference/'),
@@ -106,13 +109,14 @@ Review the new conversation excerpt against the current memory and decide what, 
 - Record commands, ports, versions, and paths exactly as the human stated them or as the conversation showed them working. Never derive one the conversation did not show.
 - Resolve contradictions at the source: rewrite the stale line instead of appending a conflicting one. If the new facts make part of a line wrong and the correct value is unknown, remove that part rather than keep or guess it. Deduplicate.
 - Prefer updating an existing file on the same subject over creating a new one; create a file only for a clearly separate topic.
-- Keep \`system/\` short. Everything in \`system/\` and \`projects/${slug}/system/\` is loaded into every chat (budget about 1,400 tokens; each file at most 4,000 characters). Put longer detail in \`reference/\` with a precise description.
+- Everything in \`system/\` and \`projects/${slug}/system/\` is loaded into every chat, so each line there costs every future chat. One reflection may grow \`system/\` by at most ${DREAM_SYSTEM_GROWTH_MAX_CHARS} characters in total; put longer additions in \`reference/\` with a precise description.
+- To change an existing file, prefer \`replace\` (an exact \`old\` passage that appears once, and its \`new\` text) or \`append\`. Use \`write\` only for a new file or to rewrite a short one.
 - Never store secrets, credentials, tokens, private URLs, or long transcript quotes.
 - Never touch files marked (read_only). Never write under \`archives/\`.
 - Write in the language the existing memory uses for that file; English when new.
 
 ## Where things go
-- \`system/human/preferences.md\`, \`system/human/identity.md\`, \`system/persona.md\`: every chat, every project.
+- \`system/human/prefs/communication.md\`, \`system/human/prefs/coding.md\`, \`system/human/prefs/workflow.md\`, \`system/human/identity.md\`, \`system/persona.md\`: every chat, every project.
 - \`projects/${slug}/system/<topic>.md\`: every chat in this project.
 - \`reference/<topic>.md\`, \`projects/${slug}/reference/<topic>.md\`: loaded on demand by description.
 - \`skills/<lowercase-name>/SKILL.md\`: a procedure the agent should follow when its description matches.
@@ -129,12 +133,14 @@ Reply with exactly one fenced json block and nothing else:
 {
   "summary": "one line, at most 80 characters: what changed, or no changes",
   "operations": [
+    { "op": "replace", "path": "<an existing path>", "old": "exact existing text, found once", "new": "replacement text (empty to remove)" },
+    { "op": "append", "path": "<a path>", "body": "markdown to add at the end", "description": "only when creating the file" },
     { "op": "write", "path": "<a path from the layout above>", "description": "one-line purpose of the file", "body": "the complete new markdown body without frontmatter" },
     { "op": "delete", "path": "<an existing path>" }
   ]
 }
 \`\`\`
-\`write\` replaces the whole file, so include every line you keep; a write that drops most of an existing file is rejected. Reuse the existing description unless it is wrong. At most ${MAX_DREAM_OPERATIONS} operations.`
+\`write\` replaces the whole file, so include every line you keep; a change that drops most of an existing file is rejected. Several operations may target the same file; they apply in order. Reuse the existing description unless it is wrong. At most ${MAX_DREAM_OPERATIONS} operations.`
 }
 
 const extractJson = (text: string): string | null => {
@@ -166,9 +172,20 @@ export function parseDreamResponse(text: string): DreamResponse {
       throw new Error(`Operation ${index + 1} has no path.`)
     }
     if (operation.op === 'delete') return { op: 'delete', path: operation.path.trim() }
-    if (operation.op === 'write' && typeof operation.body === 'string') {
+    if (
+      operation.op === 'replace' &&
+      typeof operation.old === 'string' &&
+      operation.old &&
+      typeof operation.new === 'string'
+    ) {
+      return { op: 'replace', path: operation.path.trim(), old: operation.old, new: operation.new }
+    }
+    if (
+      (operation.op === 'write' || operation.op === 'append') &&
+      typeof operation.body === 'string'
+    ) {
       return {
-        op: 'write',
+        op: operation.op,
         path: operation.path.trim(),
         body: operation.body,
         ...(typeof operation.description === 'string' && operation.description.trim()
@@ -176,7 +193,9 @@ export function parseDreamResponse(text: string): DreamResponse {
           : {}),
       }
     }
-    throw new Error(`Operation ${index + 1} must be write (with body) or delete.`)
+    throw new Error(
+      `Operation ${index + 1} must be replace (with old and new), append or write (with body), or delete.`,
+    )
   })
   return { summary, operations }
 }

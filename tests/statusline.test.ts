@@ -80,6 +80,7 @@ describe('install: status line and commands', () => {
     assert.deepEqual(report.commands.map((file) => path.basename(file)).sort(), [
       'memory-doctor.md',
       'memory-dream.md',
+      'memory-groom.md',
       'memory-init.md',
       'memory-recall.md',
       'memory-skill.md',

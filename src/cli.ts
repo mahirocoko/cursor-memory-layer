@@ -59,11 +59,14 @@ Usage:
   cursor-memory status [--workspace <dir>] [--json]
   cursor-memory show [--workspace <dir>]          Print exactly what new chats receive
   cursor-memory read <path>
-  cursor-memory write <path> [--description <text>] [--read-only] [--body <text>]
+  cursor-memory write <path> [--description <text>] [--read-only] [--body <text>] [--drop <line>...]
   cursor-memory append <path> [--body <text>] [--description <text>]
-  cursor-memory replace <path> --old <text> --new <text>
+  cursor-memory replace <path> --old <text> --new <text> [--drop <line>...]
   cursor-memory move <from> <to>
-  cursor-memory delete <path>
+  cursor-memory delete <path> [--drop <line>...]
+                                                  A system/ edit that loses 3+ lines found nowhere
+                                                  else in memory is refused; --drop names each
+                                                  line the human agreed to remove
   cursor-memory log [path] [--limit <n>]
   cursor-memory revert <sha>
   cursor-memory search <terms...> [--scope <prefix>] [--limit <n>]
@@ -135,6 +138,7 @@ function main(argv: string[]): void {
       model: { type: 'string' },
       out: { type: 'string' },
       from: { type: 'string' },
+      drop: { type: 'string', multiple: true },
       'no-open': { type: 'boolean' },
       'dry-run': { type: 'boolean' },
       'read-only': { type: 'boolean' },
@@ -149,7 +153,7 @@ function main(argv: string[]): void {
   const memoryRoot = getMemoryRoot()
   const workspace = values.workspace || process.cwd()
   const limit = values.limit ? Number.parseInt(values.limit, 10) : undefined
-  const edit = { memoryRoot, message: values.message, force: values.force }
+  const edit = { memoryRoot, message: values.message, force: values.force, drop: values.drop }
   const requirePath = (index = 0): string => {
     const value = rest[index]
     if (!value) throw new Error(`Missing path.\n\n${USAGE}`)
@@ -350,7 +354,12 @@ function main(argv: string[]): void {
             continue
           }
           const status = outcome.planned?.includes(operation.path) ? '' : ' (no change or rejected)'
-          console.log(`\n- write ${operation.path}${status}`)
+          console.log(`\n- ${operation.op} ${operation.path}${status}`)
+          if (operation.op === 'replace') {
+            console.log(`  old:\n${operation.old.replace(/^/gm, '    ')}`)
+            console.log(`  new:\n${operation.new.replace(/^/gm, '    ')}`)
+            continue
+          }
           if (operation.description) console.log(`  description: ${operation.description}`)
           console.log(operation.body.replace(/^/gm, '    '))
         }

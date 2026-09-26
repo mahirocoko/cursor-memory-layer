@@ -1,5 +1,4 @@
 import * as fs from 'node:fs'
-import { SYSTEM_DOCUMENT_MAX_CHARS } from './config.ts'
 import { hasFrontmatter, parseMemoryDocument, renderMemoryDocument } from './document.ts'
 import {
   assertNoUnrelatedChanges,
@@ -11,6 +10,7 @@ import {
   revertMemoryCommit,
   writeMemoryFile,
 } from './repository.ts'
+import { assertRetained } from './retention.ts'
 import { classifyMemoryPath, isSkillEntryPath, requiresFrontmatter } from './scope.ts'
 import { assertNoSecrets } from './secrets.ts'
 
@@ -20,7 +20,14 @@ export type EditOptions = {
   memoryRoot: string
   message?: string
   force?: boolean
+  /** Lines the human agreed to remove from `system/`; see {@link assertRetained}. */
+  drop?: string[]
 }
+
+const withDropNote = (message: string, drop?: string[]): string =>
+  drop && drop.length > 0
+    ? `${message}\n\nDropped on purpose:\n${drop.map((line) => `- ${line}`).join('\n')}`
+    : message
 
 export type EditResult = CommitMemoryPathsResult & {
   paths: string[]
@@ -53,11 +60,6 @@ export function validateMemoryContent(relativePath: string, content: string): st
       throw new Error(`${relativePath}: body must not be empty. Use delete instead.`)
   } else if (!content.trim()) {
     throw new Error(`${relativePath}: content must not be empty. Use delete instead.`)
-  }
-  if (scope.tier === 'system' && content.length > SYSTEM_DOCUMENT_MAX_CHARS) {
-    throw new Error(
-      `${relativePath} is ${content.length} characters; system memory is loaded every chat and is limited to ${SYSTEM_DOCUMENT_MAX_CHARS}. Move detail into reference/.`,
-    )
   }
   if (scope.tier === 'skill' && content.length > SKILL_FILE_MAX_CHARS) {
     throw new Error(
@@ -103,7 +105,7 @@ export function writeMemory(
   input: string,
   options: EditOptions & { description?: string; readOnly?: boolean },
 ): EditResult {
-  const { relativePath } = classifyMemoryPath(path)
+  const { relativePath, tier } = classifyMemoryPath(path)
   assertNoUnrelatedChanges(options.memoryRoot, [relativePath])
   assertWritable(options.memoryRoot, relativePath, options.force)
   const existing = currentDocument(options.memoryRoot, relativePath)
@@ -116,11 +118,23 @@ export function writeMemory(
       relativePath,
     }),
   )
+  if (tier === 'system' && existing) {
+    assertRetained({
+      memoryRoot: options.memoryRoot,
+      relativePath,
+      before: existing.body,
+      after: parseMemoryDocument(content, relativePath).body,
+      allowed: options.drop,
+    })
+  }
   writeMemoryFile(options.memoryRoot, relativePath, content)
   return commitOwned(
     options.memoryRoot,
     [relativePath],
-    options.message || `memory: ${existing ? 'update' : 'create'} ${relativePath}`,
+    withDropNote(
+      options.message || `memory: ${existing ? 'update' : 'create'} ${relativePath}`,
+      options.drop,
+    ),
   )
 }
 
@@ -192,17 +206,25 @@ export function moveMemory(from: string, to: string, options: EditOptions): Edit
 }
 
 export function deleteMemory(path: string, options: EditOptions): EditResult {
-  const { relativePath } = classifyMemoryPath(path)
+  const { relativePath, tier } = classifyMemoryPath(path)
   assertNoUnrelatedChanges(options.memoryRoot, [relativePath])
   assertWritable(options.memoryRoot, relativePath, options.force)
-  if (readCommittedMemoryFile(options.memoryRoot, relativePath) === null) {
-    throw new Error(`${relativePath} does not exist in committed memory.`)
+  const existing = currentDocument(options.memoryRoot, relativePath)
+  if (!existing) throw new Error(`${relativePath} does not exist in committed memory.`)
+  if (tier === 'system') {
+    assertRetained({
+      memoryRoot: options.memoryRoot,
+      relativePath,
+      before: existing.body,
+      after: '',
+      allowed: options.drop,
+    })
   }
   deleteMemoryFile(options.memoryRoot, relativePath)
   return commitOwned(
     options.memoryRoot,
     [relativePath],
-    options.message || `memory: delete ${relativePath}`,
+    withDropNote(options.message || `memory: delete ${relativePath}`, options.drop),
   )
 }
 

@@ -1,3 +1,4 @@
+import { DREAM_SYSTEM_GROWTH_MAX_CHARS } from '../memory/config.ts'
 import { buildDocumentContent, currentDocument, validateMemoryContent } from '../memory/editor.ts'
 import {
   assertNoUnrelatedChanges,
@@ -8,6 +9,7 @@ import {
   runGit,
   writeMemoryFile,
 } from '../memory/repository.ts'
+import { assertRetained, contentLines } from '../memory/retention.ts'
 import { classifyMemoryPath } from '../memory/scope.ts'
 import type { DreamOperation } from './prompt.ts'
 
@@ -22,18 +24,6 @@ type PendingChange = { relativePath: string; content: string | null; existed: bo
 
 const MAX_DROPPED_RATIO = 0.5
 const MIN_DROPPED_LINES = 3
-
-const contentLines = (body: string): string[] =>
-  body
-    .split('\n')
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^(?:[-*+]|\d+\.)\s+/, '')
-        .replace(/\s+/g, ' ')
-        .toLowerCase(),
-    )
-    .filter((line) => line && !line.startsWith('#') && line !== '(nothing recorded yet)')
 
 /**
  * `write` replaces a whole file, so a careless reflection can silently lose
@@ -71,40 +61,71 @@ const changedSince = (
   return new Set(output.split('\n').filter(Boolean))
 }
 
-function planChange(
-  memoryRoot: string,
-  operation: DreamOperation,
-  changedAfterSnapshot: Set<string>,
-  keptElsewhere: Set<string>,
-): PendingChange | null {
-  const { relativePath, tier } = classifyMemoryPath(operation.path)
-  if (tier === 'archive') throw new Error('reflection does not write archives/')
-  if (changedAfterSnapshot.has(relativePath)) {
-    throw new Error('changed in memory after the reflection snapshot; skipped to avoid overwriting')
-  }
+type Draft = {
+  relativePath: string
+  tier: string
+  committed: string | null
+  committedBody: string | null
+  description?: string
+  readOnly: boolean
+  body: string | null
+  content: string | null
+}
+
+const addedText = (operation: DreamOperation): string =>
+  operation.op === 'write' || operation.op === 'append'
+    ? operation.body
+    : operation.op === 'replace'
+      ? operation.new
+      : ''
+
+const countOccurrences = (text: string, needle: string): number => text.split(needle).length - 1
+
+function loadDraft(memoryRoot: string, relativePath: string, tier: string): Draft {
   const existing = currentDocument(memoryRoot, relativePath)
   if (existing?.readOnly) throw new Error('read_only')
-  if (operation.op === 'delete') {
-    if (!existing) throw new Error('does not exist')
-    return { relativePath, content: null, existed: true }
-  }
-  if (existing) assertKeepsExistingLines(existing.body, operation.body, keptElsewhere)
-  const content = validateMemoryContent(
+  const committed = readCommittedMemoryFile(memoryRoot, relativePath)
+  return {
     relativePath,
-    buildDocumentContent(operation.body, {
-      description: operation.description,
-      existingDescription: existing?.description,
-      readOnly: existing?.readOnly,
-      relativePath,
-    }),
-  )
-  if (readCommittedMemoryFile(memoryRoot, relativePath) === content) return null
-  return { relativePath, content, existed: existing !== null }
+    tier,
+    committed,
+    committedBody: existing?.body ?? null,
+    description: existing?.description,
+    readOnly: existing?.readOnly ?? false,
+    body: existing?.body ?? null,
+    content: committed,
+  }
+}
+
+function nextBody(draft: Draft, operation: DreamOperation): string | null {
+  if (operation.op === 'delete') {
+    if (draft.body === null) throw new Error('does not exist')
+    return null
+  }
+  if (operation.op === 'write') return operation.body
+  if (operation.op === 'append') {
+    return draft.body ? `${draft.body.trimEnd()}\n${operation.body.trim()}` : operation.body
+  }
+  if (draft.body === null) throw new Error('does not exist')
+  const matches = countOccurrences(draft.body, operation.old)
+  if (matches !== 1) throw new Error(`old text matched ${matches} times; it must match once`)
+  return draft.body.replace(operation.old, () => operation.new)
+}
+
+const systemGrowth = (drafts: Iterable<Draft>): number => {
+  let growth = 0
+  for (const draft of drafts) {
+    if (draft.tier !== 'system') continue
+    growth += (draft.content?.length ?? 0) - (draft.committed?.length ?? 0)
+  }
+  return growth
 }
 
 /**
  * Validates every proposed operation like a CLI write would and drops the ones
- * that fail or that race with newer commits. Writes nothing.
+ * that fail, that race with newer commits, or that grow `system/` past
+ * {@link DREAM_SYSTEM_GROWTH_MAX_CHARS}. Operations on one file apply in order.
+ * Writes nothing.
  */
 export function planDreamOperations(options: {
   memoryRoot: string
@@ -117,25 +138,70 @@ export function planDreamOperations(options: {
     options.baseRevision,
     getMemoryHeadRevision(memoryRoot),
   )
-  const pending: PendingChange[] = []
+  const drafts = new Map<string, Draft>()
   const rejected: string[] = []
   for (const operation of options.operations) {
     const keptElsewhere = new Set(
       options.operations.flatMap((other) =>
-        other !== operation && other.op === 'write' ? contentLines(other.body) : [],
+        other !== operation ? contentLines(addedText(other)) : [],
       ),
     )
     try {
-      const change = planChange(memoryRoot, operation, changedAfterSnapshot, keptElsewhere)
-      if (!change) continue
-      if (pending.some((item) => item.relativePath === change.relativePath)) {
-        throw new Error('proposed more than once')
+      const { relativePath, tier } = classifyMemoryPath(operation.path)
+      if (tier === 'archive') throw new Error('reflection does not write archives/')
+      if (changedAfterSnapshot.has(relativePath)) {
+        throw new Error(
+          'changed in memory after the reflection snapshot; skipped to avoid overwriting',
+        )
       }
-      pending.push(change)
+      const draft = drafts.get(relativePath) ?? loadDraft(memoryRoot, relativePath, tier)
+      const body = nextBody(draft, operation)
+      if (body !== null && draft.committedBody !== null) {
+        assertKeepsExistingLines(draft.committedBody, body, keptElsewhere)
+      }
+      if (tier === 'system' && draft.committedBody !== null) {
+        assertRetained({
+          memoryRoot,
+          relativePath,
+          before: draft.committedBody,
+          after: body ?? '',
+          alsoKept: options.operations
+            .filter((other) => other !== operation)
+            .map(addedText)
+            .join('\n'),
+        })
+      }
+      const content =
+        body === null
+          ? null
+          : validateMemoryContent(
+              relativePath,
+              buildDocumentContent(body, {
+                description: 'description' in operation ? operation.description : undefined,
+                existingDescription: draft.description,
+                readOnly: draft.readOnly,
+                relativePath,
+              }),
+            )
+      const next = new Map(drafts).set(relativePath, { ...draft, body, content })
+      const growth = systemGrowth(next.values())
+      if (tier === 'system' && growth > DREAM_SYSTEM_GROWTH_MAX_CHARS) {
+        throw new Error(
+          `would grow system/ by ${growth} characters in one reflection (limit ${DREAM_SYSTEM_GROWTH_MAX_CHARS}); put detail in reference/`,
+        )
+      }
+      drafts.set(relativePath, { ...draft, body, content })
     } catch (error) {
       rejected.push(`${operation.path}: ${error instanceof Error ? error.message : error}`)
     }
   }
+  const pending = [...drafts.values()]
+    .filter((draft) => draft.content !== draft.committed)
+    .map((draft) => ({
+      relativePath: draft.relativePath,
+      content: draft.content,
+      existed: draft.committed !== null,
+    }))
   return { pending, rejected }
 }
 

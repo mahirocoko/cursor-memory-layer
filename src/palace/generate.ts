@@ -8,12 +8,13 @@ import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { readDreamLog } from '../dream/state.ts'
-import { estimateTokens } from '../memory/config.ts'
+import { estimateTokens, SYSTEM_MEMORY_BUDGET_TOKENS } from '../memory/config.ts'
 import { parseMemoryDocument } from '../memory/document.ts'
 import {
   inspectCommittedMemoryProjection,
   REFLECTION_COMMIT_PREFIX,
   renderCommittedMemoryProjection,
+  systemMemoryTokens,
 } from '../memory/projection.ts'
 import { getRemoteStatus } from '../memory/remote.ts'
 import {
@@ -27,17 +28,28 @@ import { classifyMemoryPath, requiresFrontmatter } from '../memory/scope.ts'
 import { PALACE_TEMPLATE } from './template.ts'
 
 const MAX_COMMITS = 300
+const LAST_TOUCH_COMMITS = 5_000
 const DIFF_COMMITS = 40
 const DIFF_MAX_CHARS = 60_000
 const DIFF_TOTAL_MAX_CHARS = 3_000_000
+
+export type PalaceTouch = {
+  sha: string
+  date: string
+  subject: string
+  added: number
+  removed: number
+}
 
 export type PalaceFile = {
   path: string
   tier: string
   description: string
   readOnly: boolean
+  loaded: boolean
   content: string
   chars: number
+  lastCommit: PalaceTouch | null
 }
 
 export type PalaceCommit = {
@@ -56,7 +68,7 @@ export type PalaceData = {
   memoryRoot: string
   revision: string | null
   projectSlug: string
-  context: { text: string; tokens: number }
+  context: { text: string; tokens: number; systemTokens: number; budget: number }
   files: PalaceFile[]
   commits: PalaceCommit[]
   totalCommits: number
@@ -64,7 +76,36 @@ export type PalaceData = {
   remote: ReturnType<typeof getRemoteStatus>
 }
 
-function collectFiles(memoryRoot: string): PalaceFile[] {
+function collectLastTouches(memoryRoot: string): Map<string, PalaceTouch> {
+  const raw = runGit(memoryRoot, [
+    'log',
+    `-n${LAST_TOUCH_COMMITS}`,
+    '--first-parent',
+    '--no-renames',
+    '--numstat',
+    '--pretty=format:%x1e%H%x1f%cI%x1f%s%x1f',
+  ]).stdout
+  const touches = new Map<string, PalaceTouch>()
+  for (const record of raw.split('\x1e')) {
+    if (!record.trim()) continue
+    const [sha, date, subject, stats = ''] = record.split('\x1f')
+    for (const line of stats.split('\n')) {
+      const [added, removed, file] = line.trim().split('\t')
+      if (!file || touches.has(file)) continue
+      touches.set(file, {
+        sha,
+        date,
+        subject,
+        added: Number.parseInt(added, 10) || 0,
+        removed: Number.parseInt(removed, 10) || 0,
+      })
+    }
+  }
+  return touches
+}
+
+function collectFiles(memoryRoot: string, loadedPaths: Set<string>): PalaceFile[] {
+  const touches = collectLastTouches(memoryRoot)
   return listCommittedMemoryFiles(memoryRoot, '').map((relativePath) => {
     const content = readCommittedMemoryFile(memoryRoot, relativePath) ?? ''
     let tier = 'other'
@@ -80,8 +121,10 @@ function collectFiles(memoryRoot: string): PalaceFile[] {
       tier,
       description: parsed?.description || '',
       readOnly: parsed?.readOnly || false,
+      loaded: loadedPaths.has(relativePath),
       content,
       chars: content.length,
+      lastCommit: touches.get(relativePath) ?? null,
     }
   })
 }
@@ -137,16 +180,25 @@ export function collectPalaceData(memoryRoot: string, projectSlug: string): Pala
   if (!isMemoryRepository(memoryRoot) || !getMemoryHeadRevision(memoryRoot)) {
     throw new Error('Memory repository has no commits yet. Run `cursor-memory init` first.')
   }
-  const text = renderCommittedMemoryProjection(
-    inspectCommittedMemoryProjection(memoryRoot, projectSlug),
+  const projection = inspectCommittedMemoryProjection(memoryRoot, projectSlug)
+  const text = renderCommittedMemoryProjection(projection)
+  const loadedPaths = new Set(
+    [...projection.globalSystem, ...projection.projectSystem].map(
+      (document) => document.relativePath,
+    ),
   )
   return {
     generatedAt: new Date().toISOString(),
     memoryRoot: path.resolve(memoryRoot),
     revision: getMemoryHeadRevision(memoryRoot),
     projectSlug,
-    context: { text, tokens: estimateTokens(text) },
-    files: collectFiles(memoryRoot),
+    context: {
+      text,
+      tokens: estimateTokens(text),
+      systemTokens: systemMemoryTokens(projection),
+      budget: SYSTEM_MEMORY_BUDGET_TOKENS,
+    },
+    files: collectFiles(memoryRoot, loadedPaths),
     commits: collectCommits(memoryRoot),
     totalCommits:
       Number.parseInt(runGit(memoryRoot, ['rev-list', '--count', 'HEAD']).stdout.trim(), 10) || 0,

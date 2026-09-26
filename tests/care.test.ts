@@ -183,14 +183,21 @@ describe('doctor and palace', () => {
       memoryRoot,
       description: 'HTML.',
     })
+    writeMemory('projects/x/system/overview.md', 'X fact', { memoryRoot, description: 'X.' })
+    writeMemory('projects/y/system/overview.md', 'Y fact', { memoryRoot, description: 'Y.' })
     const out = writePalace(memoryRoot, 'x', path.join(tempDir(), 'palace.html'))
     const html = fs.readFileSync(out, 'utf-8')
     assert.equal((fs.statSync(out).mode & 0o777).toString(8), '600')
     assert.equal(html.split('</script>').length, 2)
     const json = html.slice(html.indexOf('const DATA = ') + 13, html.indexOf(';\nconst PAGE'))
     const data = JSON.parse(json) as ReturnType<typeof collectPalaceData>
-    assert.ok(data.files.some((file) => file.path === 'reference/html.md'))
+    const file = (filePath: string) => data.files.find((entry) => entry.path === filePath)
+    assert.equal(file('reference/html.md')?.loaded, false)
+    assert.equal(file('projects/x/system/overview.md')?.loaded, true)
+    assert.equal(file('projects/y/system/overview.md')?.loaded, false)
+    assert.ok(data.files.some((entry) => entry.loaded && entry.path.startsWith('system/')))
+    assert.match(file('reference/html.md')?.lastCommit?.subject ?? '', /reference\/html\.md/)
     assert.ok(data.commits.length >= 2)
-    assert.ok(data.commits[0].diff?.includes('Contains'))
+    assert.ok(data.commits.some((commit) => commit.diff?.includes('Contains')))
   })
 })

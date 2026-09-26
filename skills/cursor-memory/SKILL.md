@@ -11,7 +11,7 @@ You have persistent memory at `~/.cursor/memory` (a git repo). New chats receive
 
 Write when you learn something that should still be true next week:
 
-- A preference or correction about how to communicate or work (`system/human/preferences.md`).
+- A preference or correction about how to talk, code, or run work (`system/human/prefs/communication.md`, `coding.md`, or `workflow.md`).
 - A stable fact the human tells you about themselves (`system/human/identity.md`).
 - A confirmed project fact, convention, or gotcha (`projects/<slug>/system/overview.md`, or a new file beside it).
 - Longer detail that only matters sometimes (`reference/...` or `projects/<slug>/reference/...`, with a precise `description`).
@@ -23,7 +23,7 @@ Do not write:
 - One-off task state, raw transcripts, or guesses. Record facts only after the human or the repo confirms them.
 - Anything the repository already says in `AGENTS.md` or rules.
 
-Prefer `replace` over `append` when a line is stale or contradicted. Keep `system/` short: it is loaded into every chat and each file is capped at 4,000 characters.
+Prefer `replace` over `append` when a line is stale or contradicted. Everything in `system/` is loaded into every chat, so each line costs every future chat; consolidate instead of piling on, and move detail that only matters sometimes into `reference/`. Doctor warns when `system/` passes about 32,000 tokens or a file passes 20,000 characters.
 
 ## Commands
 
@@ -32,10 +32,10 @@ Run `cursor-memory slug` to get the current project slug.
 ```bash
 cursor-memory status                       # what is loaded, token estimate, recent commits
 cursor-memory show                         # exact text new chats receive
-cursor-memory read system/human/preferences.md
+cursor-memory read system/human/prefs/communication.md
 
-cursor-memory append system/human/preferences.md --body "- Replies in Thai; code and identifiers stay in English."
-cursor-memory replace system/human/preferences.md --old "- (nothing recorded yet)" --new "- Wants evidence before claims."
+cursor-memory append system/human/prefs/communication.md --body "- Replies in Thai; code and identifiers stay in English."
+cursor-memory replace system/human/prefs/communication.md --old "- (nothing recorded yet)" --new "- Wants evidence before claims."
 cursor-memory write projects/<slug>/reference/deploy.md --description "How deploys work for <slug>." <<'EOF'
 - Deploys run from CI on tags; never deploy from a laptop.
 EOF
@@ -56,7 +56,7 @@ cursor-memory skills                       # list memory skills
 
 Every write is a path-scoped commit and becomes active in the next chat. A file marked `read_only: true` needs the human's approval and `--force`. New chats list your memory skills; when one matches the task, `cursor-memory read` it and follow it.
 
-The human can run these slash commands: `/memory` (what is loaded), `/memory-init` (onboard this repo), `/memory-doctor [symptom]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, and `/memory-palace`.
+The human can run these slash commands: `/memory` (what is loaded), `/memory-init` (onboard this repo), `/memory-doctor [symptom]`, `/memory-groom [file]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, and `/memory-palace`.
 
 ## Onboarding a project
 
@@ -99,7 +99,17 @@ Run `cursor-memory doctor` when memory seems wrong, too large, or contradictory.
 - Discoverability: `reference/` files have descriptions that say when to read them; links point at real files.
 - Core-memory size: what dominates the always-loaded budget, and whether it belongs in `reference/` instead.
 
-Fix findings with the normal commands, then tell the human what you changed. `cursor-memory palace` writes a browsable HTML view of all files, history with diffs, and reflection runs to `~/.cursor/memory-palace.html`.
+Fix findings with the normal commands, then tell the human what you changed. Do not shrink `system/` during an audit; a size finding is a reason to groom. `cursor-memory palace` writes a browsable HTML view of all files, history with diffs, and reflection runs to `~/.cursor/memory-palace.html`.
+
+## Grooming core memory
+
+Grooming lowers the tokens every chat pays for without losing a rule that matters. It is a plan, the human's approval, then small moves (`/memory-groom` walks through it).
+
+- Core keeps what must shape every chat, one line per rule. Detail, history, examples, and task-specific rules move to `reference/` with a description that says when to read them, and core keeps a one-line pointer.
+- Each section gets one verdict: keep, move (to a named file), merge (into a named place), or drop (quote the evidence that it is stale or contradicted).
+- Show the plan with before and after token estimates and the exact lines to drop, then wait for the human in the chat.
+- Move first, cut second: write the `reference/` file with the moved lines verbatim, then shrink core. The CLI refuses a `system/` edit that loses three or more lines that exist nowhere else in memory; `--drop "<line>"` names a line the human agreed to remove and is recorded in the commit message.
+- Groom one file per pass, and report the commit shas so any step can be reverted.
 
 ## History and backups
 
@@ -109,4 +119,4 @@ Fix findings with the normal commands, then tell the human what you changed. `cu
 
 ## Tell the human
 
-After you change memory, say what you changed in one line, for example: "Saved to memory: you want replies in Thai (`system/human/preferences.md`)."
+After you change memory, say what you changed in one line, for example: "Saved to memory: you want replies in Thai (`system/human/prefs/communication.md`)."

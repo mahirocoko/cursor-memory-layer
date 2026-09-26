@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { describe, test } from 'node:test'
 import { buildSessionStartOutput } from '../src/hooks/session-start.ts'
+import { SYSTEM_MEMORY_BUDGET_TOKENS } from '../src/memory/config.ts'
 import {
   appendMemory,
   deleteMemory,
@@ -16,6 +17,7 @@ import { initMemory } from '../src/memory/init.ts'
 import {
   inspectCommittedMemoryProjection,
   renderCommittedMemoryProjection,
+  systemMemoryTokens,
 } from '../src/memory/projection.ts'
 import { getMemoryLog, readCommittedMemoryFile } from '../src/memory/repository.ts'
 import { searchMemory } from '../src/memory/search.ts'
@@ -29,7 +31,9 @@ describe('initMemory', () => {
     assert.deepEqual(first.seededPaths, [
       'system/persona.md',
       'system/human/identity.md',
-      'system/human/preferences.md',
+      'system/human/prefs/communication.md',
+      'system/human/prefs/coding.md',
+      'system/human/prefs/workflow.md',
       'projects/demo/system/overview.md',
     ])
     const second = initMemory(root, { slug: 'demo', workspacePath: '/tmp/demo' })
@@ -65,6 +69,15 @@ describe('projection', () => {
     assert.match(rendered, /Uncommitted memory is not active/)
   })
 
+  test('nests body headings under the file heading', () => {
+    const root = tempMemory()
+    const body = '# Title\n## Section\n### Deep\n```\n## code\n```'
+    writeMemory('projects/app/system/notes.md', body, { memoryRoot: root, description: 'Notes.' })
+    const rendered = renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, 'app'))
+    const nested = '### Title\n### Section\n### Deep\n```\n## code\n```'
+    assert.ok(rendered.includes(`## projects/app/system/notes.md\n_Notes._\n\n${nested}`))
+  })
+
   test('suggests /memory-init until the project has more than the init seed', () => {
     const root = path.join(tempDir(), 'memory')
     initMemory(root, { slug: 'fresh', workspacePath: '/tmp/fresh' })
@@ -85,6 +98,79 @@ describe('projection', () => {
       description: 'Unseeded.',
     })
     assert.doesNotMatch(render('unseeded'), /## Project memory/)
+  })
+
+  test('lists project references before a capped set of global ones', () => {
+    const root = tempMemory()
+    const edit = { memoryRoot: root }
+    for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      writeMemory(`reference/${name}.md`, name, { ...edit, description: `Global ${name}.` })
+    }
+    writeMemory('projects/app/reference/zeta.md', 'z', {
+      ...edit,
+      description: `Project zeta ${'x'.repeat(200)}`,
+    })
+    const rendered = renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, 'app'))
+    const index = rendered.slice(rendered.indexOf('## On-demand memory'))
+    assert.ok(index.indexOf('projects/app/reference/zeta.md') < index.indexOf('reference/a.md'))
+    assert.match(index, /Project zeta x+…\n/)
+    assert.match(index, /reference\/d\.md/)
+    assert.doesNotMatch(index, /reference\/e\.md/)
+    assert.match(index, /… 2 more reference file\(s\)/)
+  })
+
+  test('budget notice counts system files only', () => {
+    const root = tempMemory()
+    const projection = () => inspectCommittedMemoryProjection(root, 'app')
+    assert.ok(systemMemoryTokens(projection()) < SYSTEM_MEMORY_BUDGET_TOKENS)
+    assert.doesNotMatch(renderCommittedMemoryProjection(projection()), /Memory budget notice/)
+    const line = (n: number) => `- Fact ${n}: ${'detail '.repeat(40)}`
+    for (const file of ['one', 'two', 'three', 'four', 'five', 'six']) {
+      writeMemory(
+        `projects/app/system/${file}.md`,
+        Array.from({ length: 80 }, (_, n) => line(n)).join('\n'),
+        { memoryRoot: root, description: file },
+      )
+    }
+    assert.ok(systemMemoryTokens(projection()) > SYSTEM_MEMORY_BUDGET_TOKENS)
+    assert.match(
+      renderCommittedMemoryProjection(projection()),
+      /Memory budget notice: `system\/` files load about \d+ tokens/,
+    )
+  })
+
+  test('refuses to lose system lines that exist nowhere else unless dropped on purpose', () => {
+    const root = tempMemory()
+    const edit = { memoryRoot: root }
+    const target = 'projects/app/system/overview.md'
+    const lines = [
+      '- Deploys run from the release branch only.',
+      '- Staging lives on port 4100 behind the VPN.',
+      '- Feature flags are read from flags.yaml.',
+      '- Payments use the sandbox key in development.',
+      '- The mobile app shares the web API client.',
+    ]
+    writeMemory(target, lines.join('\n'), { ...edit, description: 'App.' })
+
+    assert.throws(
+      () => writeMemory(target, lines[0], edit),
+      /would lose 4 lines that exist nowhere else[\s\S]*staging lives on port 4100/,
+    )
+    replaceInMemory(target, 'port 4100', 'port 4200', edit)
+
+    writeMemory('projects/app/reference/infra.md', lines[1].replace('4100', '4200'), {
+      ...edit,
+      description: 'Infra detail.',
+    })
+    assert.throws(() => writeMemory(target, lines[0], edit), /would lose 3 lines/)
+    const trimmed = writeMemory(target, lines[0], { ...edit, drop: [lines[3], lines[4]] })
+    assert.equal(trimmed.committed, true)
+    assert.match(git(root, 'log', '-1', '--format=%B'), /Dropped on purpose:\n- - Payments use/)
+
+    const extra = ['- Two unique facts here.', '- Three unique facts here.', '- Four unique facts.']
+    writeMemory(target, [lines[0], ...extra].join('\n'), edit)
+    assert.throws(() => deleteMemory(target, edit), /would lose 4 lines/)
+    deleteMemory(target, { ...edit, drop: [lines[0], ...extra.slice(0, 2)] })
   })
 
   test('excludes malformed committed files and reports them', () => {
@@ -163,10 +249,6 @@ describe('editor', () => {
     assert.throws(
       () => writeMemory('notes/k.md', 'x', { ...edit, description: 'K.' }),
       /Unsupported memory path/,
-    )
-    assert.throws(
-      () => writeMemory('system/big.md', 'x'.repeat(5000), { ...edit, description: 'Big.' }),
-      /limited to 4000/,
     )
     assert.throws(() => writeMemory('reference/n.md', 'body', edit), /Provide --description/)
     assert.equal(git(root, 'status', '--porcelain'), '')

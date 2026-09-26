@@ -12,9 +12,17 @@ import { isBackedOff, isDreamLocked, readDreamLog, readDreamState } from '../dre
 import { type HooksConfig, isOwnedHook } from '../install/hooks-config.ts'
 import { isOwnedStatusLine, readCliConfig } from '../install/statusline-config.ts'
 import { buildVectorProfile, cosineSimilarity } from '../recall/rank.ts'
-import { ACTIVE_MEMORY_BUDGET_TOKENS, estimateTokens, SYSTEM_DOCUMENT_MAX_CHARS } from './config.ts'
+import {
+  estimateTokens,
+  SYSTEM_DOCUMENT_WARN_CHARS,
+  SYSTEM_MEMORY_BUDGET_TOKENS,
+} from './config.ts'
 import { parseMemoryDocument } from './document.ts'
-import { inspectCommittedMemoryProjection, renderCommittedMemoryProjection } from './projection.ts'
+import {
+  inspectCommittedMemoryProjection,
+  renderCommittedMemoryProjection,
+  systemMemoryTokens,
+} from './projection.ts'
 import { getRemoteStatus } from './remote.ts'
 import {
   getMemoryRepositoryStatus,
@@ -88,25 +96,26 @@ function checkSize(
   findings: DoctorFinding[],
 ) {
   for (const file of files) {
-    if (file.tier === 'system' && file.content.length > SYSTEM_DOCUMENT_MAX_CHARS) {
+    if (file.tier === 'system' && file.content.length > SYSTEM_DOCUMENT_WARN_CHARS) {
       findings.push({
-        level: 'error',
+        level: 'warn',
         check: 'core size',
-        detail: `${file.relativePath} is ${file.content.length} chars (limit ${SYSTEM_DOCUMENT_MAX_CHARS}); it cannot be rewritten until trimmed.`,
+        detail: `${file.relativePath} is ${file.content.length} chars, above Letta's ${SYSTEM_DOCUMENT_WARN_CHARS}-char per-file default; groom it with /memory-groom.`,
       })
     }
   }
   const projection = inspectCommittedMemoryProjection(memoryRoot, projectSlug)
-  const tokens = estimateTokens(renderCommittedMemoryProjection(projection))
+  const total = estimateTokens(renderCommittedMemoryProjection(projection))
+  const tokens = systemMemoryTokens(projection)
   const heaviest = [...projection.globalSystem, ...projection.projectSystem]
     .sort((left, right) => right.body.length - left.body.length)
     .slice(0, 3)
     .map((doc) => `${doc.relativePath} ~${estimateTokens(doc.body)}t`)
     .join(', ')
   findings.push({
-    level: tokens > ACTIVE_MEMORY_BUDGET_TOKENS ? 'warn' : 'ok',
+    level: tokens > SYSTEM_MEMORY_BUDGET_TOKENS ? 'warn' : 'ok',
     check: 'core size',
-    detail: `Every chat in "${projectSlug}" loads ~${tokens} tokens (budget ${ACTIVE_MEMORY_BUDGET_TOKENS}).${heaviest ? ` Largest: ${heaviest}.` : ''}`,
+    detail: `Every chat in "${projectSlug}" loads ~${total} tokens; system/ files are ~${tokens} of budget ${SYSTEM_MEMORY_BUDGET_TOKENS}.${heaviest ? ` Largest: ${heaviest}.` : ''}`,
   })
 }
 

@@ -34,8 +34,18 @@ const globalSeeds: Seed[] = [
     body: '- (nothing recorded yet)',
   },
   {
-    path: 'system/human/preferences.md',
-    description: 'How the human wants me to communicate and work, learned from their corrections.',
+    path: 'system/human/prefs/communication.md',
+    description: 'How the human wants me to talk to them: language, length, tone, and format.',
+    body: '- (nothing recorded yet)',
+  },
+  {
+    path: 'system/human/prefs/coding.md',
+    description: 'How the human wants code written and reviewed when the repository is silent.',
+    body: '- (nothing recorded yet)',
+  },
+  {
+    path: 'system/human/prefs/workflow.md',
+    description: 'How the human wants work run: approvals, verification, tools, and handoffs.',
     body: '- (nothing recorded yet)',
   },
 ]

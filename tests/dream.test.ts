@@ -47,7 +47,7 @@ describe('dream response contract', () => {
       reply({
         summary: '  Saved   pnpm preference ',
         operations: [
-          { op: 'write', path: 'system/human/preferences.md', body: '- Uses pnpm.' },
+          { op: 'write', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
           { op: 'delete', path: 'reference/old.md' },
         ],
       }),
@@ -98,7 +98,11 @@ describe('runDream', () => {
             text: reply({
               summary: 'Prefers pnpm',
               operations: [
-                { op: 'write', path: 'system/human/preferences.md', body: '- Uses pnpm, not npm.' },
+                {
+                  op: 'write',
+                  path: 'system/human/prefs/workflow.md',
+                  body: '- Uses pnpm, not npm.',
+                },
                 {
                   op: 'write',
                   path: 'skills/release/SKILL.md',
@@ -120,7 +124,7 @@ describe('runDream', () => {
     assert.equal(prompts[0].model, 'auto')
     assert.equal(prompts[0].workspace, process.env.CURSOR_MEMORY_DREAM_WORKSPACE)
     assert.match(prompts[0].prompt, /Question 2: from now on use pnpm/)
-    assert.match(prompts[0].prompt, /### system\/human\/preferences\.md/)
+    assert.match(prompts[0].prompt, /### system\/human\/prefs\/workflow\.md/)
     assert.match(prompts[0].prompt, /### reference\/locked\.md \(read_only\)/)
     assert.equal(outcome.rejected?.length, 3)
 
@@ -128,10 +132,10 @@ describe('runDream', () => {
     assert.equal(commit.subject, 'memory(reflection): Prefers pnpm')
     assert.deepEqual(commit.paths.sort(), [
       'skills/release/SKILL.md',
-      'system/human/preferences.md',
+      'system/human/prefs/workflow.md',
     ])
     assert.match(
-      readCommittedMemoryFile(memoryRoot, 'system/human/preferences.md') || '',
+      readCommittedMemoryFile(memoryRoot, 'system/human/prefs/workflow.md') || '',
       /Uses pnpm/,
     )
     assert.match(
@@ -178,7 +182,7 @@ describe('runDream', () => {
           text: reply({
             summary: 'Prefers pnpm',
             operations: [
-              { op: 'write', path: 'system/human/preferences.md', body: '- Uses pnpm.' },
+              { op: 'write', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
               { op: 'write', path: 'archives/x.md', body: '- nope' },
             ],
           }),
@@ -186,7 +190,7 @@ describe('runDream', () => {
       },
     )
     assert.equal(outcome.status, 'dry-run')
-    assert.deepEqual(outcome.planned, ['system/human/preferences.md'])
+    assert.deepEqual(outcome.planned, ['system/human/prefs/workflow.md'])
     assert.equal(outcome.operations?.length, 2)
     assert.equal(outcome.rejected?.length, 1)
     assert.equal(getMemoryLog(memoryRoot, 1)[0].sha, head)
@@ -197,9 +201,9 @@ describe('runDream', () => {
   test('rejects writes that drop most of a file unless the lines move elsewhere', () => {
     const memoryRoot = tempMemory()
     const lines = ['- Uses pnpm.', '- Replies in Thai.', '- Small commits.', '- Tabs, not spaces.']
-    writeMemory('system/human/preferences.md', lines.join('\n'), { memoryRoot })
+    writeMemory('system/human/prefs/workflow.md', lines.join('\n'), { memoryRoot })
     const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
-    const shrink = { op: 'write' as const, path: 'system/human/preferences.md', body: lines[0] }
+    const shrink = { op: 'write' as const, path: 'system/human/prefs/workflow.md', body: lines[0] }
 
     const dropped = planDreamOperations({ memoryRoot, baseRevision, operations: [shrink] })
     assert.equal(dropped.pending.length, 0)
@@ -229,13 +233,84 @@ describe('runDream', () => {
     assert.deepEqual(rewritten.rejected, [])
   })
 
+  test('replace and append apply in order, and system growth per reflection is capped', () => {
+    const memoryRoot = tempMemory()
+    writeMemory('system/human/prefs/workflow.md', '- Uses npm.\n- Replies in Thai.', { memoryRoot })
+    const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
+    const path = 'system/human/prefs/workflow.md'
+    const plan = planDreamOperations({
+      memoryRoot,
+      baseRevision,
+      operations: [
+        { op: 'replace', path, old: 'npm', new: 'pnpm' },
+        { op: 'append', path, body: '- Small commits.' },
+        { op: 'replace', path, old: 'missing', new: 'x' },
+        { op: 'append', path, body: `- ${'long detail '.repeat(200)}` },
+      ],
+    })
+    assert.equal(plan.pending.length, 1)
+    assert.match(
+      plan.pending[0].content ?? '',
+      /- Uses pnpm\.\n- Replies in Thai\.\n- Small commits\.\n$/,
+    )
+    assert.match(plan.rejected[0], /old text matched 0 times/)
+    assert.match(plan.rejected[1], /would grow system\/ by \d+ characters/)
+
+    const reference = planDreamOperations({
+      memoryRoot,
+      baseRevision,
+      operations: [
+        {
+          op: 'append',
+          path: 'reference/detail.md',
+          description: 'Detail.',
+          body: `- ${'long detail '.repeat(200)}`,
+        },
+      ],
+    })
+    assert.deepEqual(reference.rejected, [])
+  })
+
+  test('rejects a system trim that loses unique lines unless they move in the same batch', () => {
+    const memoryRoot = tempMemory()
+    const facts = [
+      '- Reviews happen in the afternoon.',
+      '- Screenshots go to the temp evidence dir.',
+      '- Thai to the human, English to agents.',
+      '- Never push without being asked.',
+      '- Commit messages use Conventional Commits.',
+      '- Visual acceptance stays with the human.',
+    ]
+    const path = 'system/human/prefs/workflow.md'
+    writeMemory(path, facts.join('\n'), { memoryRoot })
+    const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
+    const trim = { op: 'replace' as const, path, old: facts.slice(3).join('\n'), new: '' }
+    const lost = planDreamOperations({ memoryRoot, baseRevision, operations: [trim] })
+    assert.match(lost.rejected[0], /would lose 3 lines/)
+
+    const moved = planDreamOperations({
+      memoryRoot,
+      baseRevision,
+      operations: [
+        trim,
+        {
+          op: 'write',
+          path: 'reference/workflow-detail.md',
+          description: 'Workflow detail.',
+          body: facts.slice(3).join('\n'),
+        },
+      ],
+    })
+    assert.deepEqual(moved.rejected, [])
+  })
+
   test('replacing the seed placeholder is not counted as dropping lines', () => {
     const memoryRoot = tempMemory()
     const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
     const plan = planDreamOperations({
       memoryRoot,
       baseRevision,
-      operations: [{ op: 'write', path: 'system/human/preferences.md', body: '- Uses pnpm.' }],
+      operations: [{ op: 'write', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' }],
     })
     assert.deepEqual(plan.rejected, [])
   })
@@ -254,12 +329,16 @@ describe('runDream', () => {
         memoryRoot,
         settings: settings(),
         runAgent: () => {
-          writeMemory('system/human/preferences.md', '- Written by the live chat.', { memoryRoot })
+          writeMemory('system/human/prefs/workflow.md', '- Written by the live chat.', {
+            memoryRoot,
+          })
           return {
             ok: true,
             text: reply({
               summary: 'late',
-              operations: [{ op: 'write', path: 'system/human/preferences.md', body: '- Stale.' }],
+              operations: [
+                { op: 'write', path: 'system/human/prefs/workflow.md', body: '- Stale.' },
+              ],
             }),
           }
         },
@@ -268,7 +347,7 @@ describe('runDream', () => {
     assert.equal(outcome.status, 'no-change')
     assert.match(outcome.rejected?.[0] || '', /changed in memory after the reflection snapshot/)
     assert.match(
-      readCommittedMemoryFile(memoryRoot, 'system/human/preferences.md') || '',
+      readCommittedMemoryFile(memoryRoot, 'system/human/prefs/workflow.md') || '',
       /live chat/,
     )
   })
