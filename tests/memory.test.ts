@@ -94,6 +94,27 @@ describe('projection', () => {
     assert.doesNotMatch(rendered, /background evidence/)
     assert.match(rendered, /## system\/persona\.md\n_[^\n]*_ \(read-only\)/)
     assert.ok(rendered.indexOf('## system/persona.md') < rendered.indexOf('## system/human/'))
+    assert.match(
+      rendered,
+      /explicit request for a tone, format, or level of detail is not a change of identity/,
+    )
+    assert.match(rendered, /corrections and frustration[\s\S]*signals to update memory now/)
+    assert.match(rendered, /general rule that makes your future self act better/)
+    assert.match(rendered, /Edits take effect in the next chat, not this one/)
+    assert.match(rendered, /`cursor-memory search <terms>` and `cursor-memory recall <terms>`/)
+    assert.match(rendered, /You cannot schedule yourself/)
+    assert.match(
+      rendered,
+      /Cursor rules, hooks, or `AGENTS\.md` for behavior that must be enforced/,
+    )
+    assert.doesNotMatch(rendered, /letta cron|\$MEMORY_DIR|Agent tool|\bmods?\b|discord/i)
+    assert.ok(
+      rendered.indexOf('outranks your model defaults') < rendered.indexOf('## system/persona.md'),
+    )
+    assert.ok(
+      rendered.indexOf('## system/persona.md') < 3_200,
+      'contract stays small enough for every chat',
+    )
     assert.match(rendered, /projects\/app\/reference\/deploy\.md — Deploys\./)
     assert.doesNotMatch(rendered, /Other fact|Deploy body|Archived body|Draft body/)
     assert.match(rendered, /Uncommitted memory is not active/)

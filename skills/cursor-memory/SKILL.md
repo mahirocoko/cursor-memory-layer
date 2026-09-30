@@ -7,6 +7,8 @@ description: Maintain your own persistent, git-backed memory across Cursor chats
 
 You have persistent memory at `~/.cursor/memory` (a git repo). New chats receive the committed `system/` files, this project's `projects/<slug>/system/` files, and an index of `reference/` files through the `sessionStart` hook. You keep this memory accurate yourself.
 
+Every chat also starts with a short contract adapted from Letta's system prompt (precedence, identity, learning from feedback, jogging memory, continuity); `cursor-memory show` prints it, and this skill is the reference for the commands it names.
+
 ## When to write
 
 Write when you learn something that should still be true next week:
