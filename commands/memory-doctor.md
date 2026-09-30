@@ -16,7 +16,7 @@ Then, or when no symptom was given, run the general audit:
 
 1. Run `cursor-memory doctor` in this workspace.
 2. Follow the "Auditing memory" section of the `cursor-memory` skill for every `warn` or `FAIL` line: fix it with `cursor-memory write`, `replace`, `move`, or `delete`, one focused commit per fix.
-3. Do not shrink `system/` here. For a `core size` warning, summarize what dominates and suggest `/memory-groom`, which plans first and asks before cutting.
+3. Do not shrink always-loaded files here. For a `core size` warning, summarize what dominates and suggest `/memory-groom`, which plans first and asks before cutting.
 4. Ask the human before deleting a file, moving more than three files, or changing anything marked `read_only`.
 5. Run `cursor-memory doctor` again and report what changed, with the commit shas, and anything left for the human to decide.
 

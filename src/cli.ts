@@ -33,6 +33,7 @@ import {
 import { resolveProjectSlug } from './memory/identity.ts'
 import { initMemory } from './memory/init.ts'
 import {
+  coreTokenReport,
   inspectCommittedMemoryProjection,
   listCommittedSkills,
   renderCommittedMemoryProjection,
@@ -44,6 +45,7 @@ import {
   setRemote,
   unsetRemote,
 } from './memory/remote.ts'
+import { repairMemoryRepository } from './memory/repair.ts'
 import { getMemoryLog, readCommittedMemoryFile } from './memory/repository.ts'
 import { searchMemory } from './memory/search.ts'
 import { loadSettings } from './memory/settings.ts'
@@ -64,7 +66,7 @@ Usage:
   cursor-memory replace <path> --old <text> --new <text> [--drop <line>...]
   cursor-memory move <from> <to>
   cursor-memory delete <path> [--drop <line>...]
-                                                  A system/ edit that loses 3+ lines found nowhere
+                                                  An always-loaded edit that loses 3+ lines found nowhere
                                                   else in memory is refused; --drop names each
                                                   line the human agreed to remove
   cursor-memory log [path] [--limit <n>]
@@ -83,6 +85,10 @@ Reflection (Letta "dream"):
 
 Care and history:
   cursor-memory doctor [--json] [--workspace <dir>]
+  cursor-memory tokens [--limit <n>] [--json] [--workspace <dir>]
+                                                  Estimated tokens of the loaded core
+  cursor-memory repair                            Finish a stuck merge when one side
+                                                  already contains the other
   cursor-memory palace [--out <file>] [--no-open] [--workspace <dir>]
   cursor-memory diff [<rev> [<rev>]]
   cursor-memory export --out <dir>
@@ -381,6 +387,26 @@ function main(argv: string[]): void {
         )
         if (run.rejected) console.log(`  rejected: ${run.rejected.join('; ')}`)
       }
+      return
+    }
+    case 'tokens': {
+      const report = coreTokenReport(
+        inspectCommittedMemoryProjection(memoryRoot, resolveProjectSlug(workspace, memoryRoot)),
+        limit ?? 20,
+      )
+      if (values.json) console.log(JSON.stringify(report, null, 2))
+      else {
+        console.log(`Core: ${report.total} tokens (budget ${report.budget})`)
+        for (const file of report.files)
+          console.log(`${String(file.tokens).padStart(6)}  ${file.path}`)
+      }
+      return
+    }
+    case 'repair': {
+      const result = repairMemoryRepository(memoryRoot)
+      console.log(result.summary)
+      if (result.sha) console.log(`Committed ${result.sha.slice(0, 8)}.`)
+      if (result.status === 'unresolved' || result.status === 'error') process.exitCode = 1
       return
     }
     case 'doctor': {

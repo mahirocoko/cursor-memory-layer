@@ -326,7 +326,7 @@ const renderContext = function () {
   });
   rows += '<tr><td class="muted">Fixed contract, on-demand index, skills, last reflection (not counted)</td><td class="muted">≈' + Math.max(0, total - system) + '</td></tr>';
   return '<p>New chats in <b>' + esc(DATA.projectSlug) + '</b> receive about <b>' + total + '</b> tokens of memory. ' +
-    'The <span class="mono">system/</span> files are about <b>' + system + '</b> of a ' + budget + '-token budget' +
+    'Always-loaded files are about <b>' + system + '</b> of a ' + budget + '-token budget' +
     (system > budget ? ', <span class="del">over budget</span>' : '') + '.</p>' +
     '<div class="bar' + (system > budget ? ' over' : '') + '">' + segments + '</div>' +
     '<table style="margin-bottom:16px">' + rows + '</table>' +

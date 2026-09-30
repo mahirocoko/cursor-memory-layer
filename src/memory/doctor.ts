@@ -124,7 +124,7 @@ function checkSize(
   findings.push({
     level: tokens > SYSTEM_MEMORY_BUDGET_TOKENS ? 'warn' : 'ok',
     check: 'core size',
-    detail: `Every chat in "${projectSlug}" loads ~${total} tokens; system/ files are ~${tokens} of budget ${SYSTEM_MEMORY_BUDGET_TOKENS}.${heaviest ? ` Largest: ${heaviest}.` : ''}`,
+    detail: `Every chat in "${projectSlug}" loads ~${total} tokens; always-loaded files are ~${tokens} of budget ${SYSTEM_MEMORY_BUDGET_TOKENS}.${heaviest ? ` Largest: ${heaviest}.` : ''}`,
   })
 }
 

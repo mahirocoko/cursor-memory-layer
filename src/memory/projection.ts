@@ -185,7 +185,7 @@ const renderContract = (projection: MemoryProjection): string => {
     '',
     'Learning: treat corrections and frustration ("why did you do that?", "I already told you", "never do that again") as signals to update memory now. Write the general rule that makes your future self act better, not a record of the event. When asked why you forgot or ignored something, do not just apologize: check what memory held and what this chat loaded, find why it failed, and fix the memory.',
     '',
-    'Writing: use the `cursor-memory` CLI (`write`, `replace`, `append`; each is a revertible commit). Edits take effect in the next chat, not this one, so also act on the decision now. Keep `system/` lean: rules and pointers, not detail that `recall`, the repository, or `reference/` already holds. Never store secrets or raw transcripts. The `cursor-memory` skill has the details.',
+    'Writing: use the `cursor-memory` CLI (`write`, `replace`, `append`; each is a revertible commit). Edits take effect in the next chat, not this one, so also act on the decision now. Keep always-loaded files lean (`persona.md`, `human/`, and the current project top-level files): rules and pointers, not detail that `recall`, the repository, or `reference/` already holds. Never store secrets or raw transcripts. The `cursor-memory` skill has the details.',
     '',
     'Remembering: when a name, project, or decision is unfamiliar, do not assume it is new. Run `cursor-memory search <terms>` and `cursor-memory recall <terms>` first; recall holds past Cursor chats, including what you said and did.',
     '',
@@ -322,15 +322,32 @@ export function renderCommittedMemoryProjection(projection: MemoryProjection): s
   }
   const tokens = systemMemoryTokens(projection)
   if (tokens > SYSTEM_MEMORY_BUDGET_TOKENS) {
-    rendered += `\n> Memory budget notice: \`system/\` files load about ${tokens} tokens every chat (budget ${SYSTEM_MEMORY_BUDGET_TOKENS}). Suggest \`/memory-groom\` to the human; do not trim it unasked.\n`
+    rendered += `\n> Memory budget notice: always-loaded files load about ${tokens} tokens every chat (budget ${SYSTEM_MEMORY_BUDGET_TOKENS}). Suggest \`/memory-groom\` to the human; do not trim it unasked.\n`
   }
   return rendered
 }
 
-/** Tokens of the `system/` documents a chat in this project loads, excluding the fixed contract and indexes. */
+/** Tokens of the always-loaded documents a chat in this project loads, excluding the fixed contract and indexes. */
 export function systemMemoryTokens(projection: MemoryProjection): number {
   return [...projection.globalSystem, ...projection.projectSystem].reduce(
     (sum, document) => sum + estimateTokens(renderSystemDocument(document)),
     0,
   )
+}
+
+export function coreTokenReport(
+  projection: MemoryProjection,
+  top = 20,
+): { total: number; budget: number; files: Array<{ path: string; tokens: number }> } {
+  const files = [...projection.globalSystem, ...projection.projectSystem]
+    .map((document) => ({
+      path: document.relativePath,
+      tokens: estimateTokens(renderSystemDocument(document)),
+    }))
+    .sort((left, right) => right.tokens - left.tokens || left.path.localeCompare(right.path))
+  return {
+    total: systemMemoryTokens(projection),
+    budget: SYSTEM_MEMORY_BUDGET_TOKENS,
+    files: files.slice(0, Math.max(0, top)),
+  }
 }

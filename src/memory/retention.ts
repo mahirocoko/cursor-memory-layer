@@ -1,6 +1,6 @@
 /**
- * Retention guard for always-loaded memory. Shrinking `system/` is how memory
- * gets groomed, and also how facts get lost; a line may leave a `system/` file
+ * Retention guard for always-loaded memory. Shrinking those files is how memory
+ * gets groomed, and also how facts get lost; a line may leave an always-loaded file
  * only if it survives somewhere else in committed memory or is dropped on purpose.
  */
 

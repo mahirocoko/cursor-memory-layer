@@ -15,10 +15,12 @@ import {
 import { resolveProjectSlug, toProjectSlug } from '../src/memory/identity.ts'
 import { initMemory } from '../src/memory/init.ts'
 import {
+  coreTokenReport,
   inspectCommittedMemoryProjection,
   renderCommittedMemoryProjection,
   systemMemoryTokens,
 } from '../src/memory/projection.ts'
+import { repairMemoryRepository } from '../src/memory/repair.ts'
 import { getMemoryLog, readCommittedMemoryFile } from '../src/memory/repository.ts'
 import { searchMemory } from '../src/memory/search.ts'
 import { git, tempDir, tempMemory, tempWorkspace } from './helpers.ts'
@@ -179,7 +181,7 @@ describe('projection', () => {
     assert.ok(systemMemoryTokens(projection()) > SYSTEM_MEMORY_BUDGET_TOKENS)
     assert.match(
       renderCommittedMemoryProjection(projection()),
-      /Memory budget notice: `system\/` files load about \d+ tokens/,
+      /Memory budget notice: always-loaded files load about \d+ tokens/,
     )
   })
 
@@ -383,6 +385,50 @@ describe('editor', () => {
       searchMemory(root, 'pnpm').map((match) => `${match.relativePath}:${match.lineNumber}`),
       ['reference/s.md:5'],
     )
+  })
+})
+
+describe('tokens and repair', () => {
+  test('tokens reports the loaded core and ranks the heaviest file first', () => {
+    const root = tempMemory()
+    writeMemory('app/overview.md', 'Project fact.', { memoryRoot: root, description: 'App.' })
+    const report = coreTokenReport(inspectCommittedMemoryProjection(root, 'app'), 3)
+    assert.ok(report.total > 0)
+    assert.equal(report.files.length, 3)
+    assert.ok(report.files[0].tokens >= report.files[1].tokens)
+    assert.equal(repairMemoryRepository(root).status, 'clean')
+  })
+
+  test('repairs a merge when one side already contains the other', () => {
+    const root = tempMemory()
+    const file = 'human/prefs/workflow.md'
+    git(root, 'branch', 'other')
+    replaceInMemory(file, '- (nothing recorded yet)', '- shared rule\n- extra detail', {
+      memoryRoot: root,
+    })
+    git(root, 'checkout', 'other')
+    replaceInMemory(file, '- (nothing recorded yet)', '- shared rule', { memoryRoot: root })
+    git(root, 'checkout', 'main')
+    assert.throws(() => git(root, 'merge', 'other'))
+    const repaired = repairMemoryRepository(root)
+    assert.equal(repaired.status, 'repaired')
+    assert.match(readCommittedMemoryFile(root, file) || '', /shared rule/)
+    assert.match(readCommittedMemoryFile(root, file) || '', /extra detail/)
+    assert.equal(git(root, 'status', '--porcelain'), '')
+  })
+
+  test('leaves a merge unresolved when the two sides diverge', () => {
+    const root = tempMemory()
+    const file = 'human/prefs/workflow.md'
+    git(root, 'branch', 'other')
+    replaceInMemory(file, '- (nothing recorded yet)', '- alpha only', { memoryRoot: root })
+    git(root, 'checkout', 'other')
+    replaceInMemory(file, '- (nothing recorded yet)', '- beta only', { memoryRoot: root })
+    git(root, 'checkout', 'main')
+    assert.throws(() => git(root, 'merge', 'other'))
+    const repaired = repairMemoryRepository(root)
+    assert.equal(repaired.status, 'unresolved')
+    assert.match(git(root, 'status', '--porcelain'), /^UU /m)
   })
 })
 

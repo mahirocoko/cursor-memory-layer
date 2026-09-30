@@ -202,7 +202,7 @@ export function planDreamOperations(options: {
       const growth = systemGrowth(next.values())
       if (tier === 'system' && growth > DREAM_SYSTEM_GROWTH_MAX_CHARS) {
         throw new Error(
-          `would grow system/ by ${growth} characters in one reflection (limit ${DREAM_SYSTEM_GROWTH_MAX_CHARS}); put detail in reference/`,
+          `would grow always-loaded files by ${growth} characters in one reflection (limit ${DREAM_SYSTEM_GROWTH_MAX_CHARS}); put detail in reference/`,
         )
       }
       drafts.set(relativePath, { ...draft, body, content })

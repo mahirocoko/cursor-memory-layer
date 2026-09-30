@@ -81,6 +81,8 @@ cursor-memory dream --dry-run         # propose edits for the latest chat here, 
 cursor-memory dreams                  # recent reflection runs
 
 cursor-memory doctor                  # structure, size, duplicates, secrets, hooks, reflection
+cursor-memory tokens                  # estimated tokens of the loaded core
+cursor-memory repair                  # finish a stuck merge when one side contains the other
 cursor-memory palace                  # static HTML viewer at ~/.cursor/memory-palace.html
 cursor-memory backup | backups | restore --from <name> --force
 cursor-memory remote set <url>        # optional mirror; pushes main after each commit

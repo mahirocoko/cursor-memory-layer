@@ -25,7 +25,7 @@ Do not write:
 - One-off task state, raw transcripts, or guesses. Record facts only after the human or the repo confirms them.
 - Anything the repository already says in `AGENTS.md` or rules.
 
-Prefer `replace` over `append` when a line is stale or contradicted. Everything in `system/` is loaded into every chat, so each line costs every future chat; consolidate instead of piling on, and move detail that only matters sometimes into `reference/`. Doctor warns when `system/` passes about 32,000 tokens or a file passes 20,000 characters.
+Prefer `replace` over `append` when a line is stale or contradicted. `persona.md`, `human/`, `MEMORY.md`, and `<slug>/*.md` load every chat, so each line there costs every future chat; consolidate instead of piling on, and move detail that only matters sometimes into `reference/` or a nested project file. Doctor warns when those files pass about 12,000 tokens or a file passes 16,000 characters. Writes stop at 20,000 characters per always-loaded file.
 
 ## Commands
 
@@ -103,7 +103,7 @@ Run `cursor-memory doctor` when memory seems wrong, too large, or contradictory.
 - Discoverability: `reference/` files have descriptions that say when to read them; links point at real files.
 - Core-memory size: what dominates the always-loaded budget, and whether it belongs in `reference/` instead.
 
-Fix findings with the normal commands, then tell the human what you changed. Do not shrink `system/` during an audit; a size finding is a reason to groom. `cursor-memory palace` writes a browsable HTML view of all files, history with diffs, and reflection runs to `~/.cursor/memory-palace.html`.
+Fix findings with the normal commands, then tell the human what you changed. Do not shrink always-loaded files during an audit; a size finding is a reason to groom. `cursor-memory palace` writes a browsable HTML view of all files, history with diffs, and reflection runs to `~/.cursor/memory-palace.html`.
 
 ## Grooming core memory
 
@@ -112,7 +112,7 @@ Grooming lowers the tokens every chat pays for without losing a rule that matter
 - Core keeps what must shape every chat, one line per rule. Detail, history, examples, and task-specific rules move to `reference/` with a description that says when to read them, and core keeps a one-line pointer.
 - Each section gets one verdict: keep, move (to a named file), merge (into a named place), or drop (quote the evidence that it is stale or contradicted).
 - Show the plan with before and after token estimates and the exact lines to drop, then wait for the human in the chat.
-- Move first, cut second: write the `reference/` file with the moved lines verbatim, then shrink core. The CLI refuses a `system/` edit that loses three or more lines that exist nowhere else in memory; `--drop "<line>"` names a line the human agreed to remove and is recorded in the commit message.
+- Move first, cut second: write the `reference/` file with the moved lines verbatim, then shrink core. The CLI refuses an always-loaded edit that loses three or more lines that exist nowhere else in memory; `--drop "<line>"` names a line the human agreed to remove and is recorded in the commit message.
 - Groom one file per pass, and report the commit shas so any step can be reverted. Without a named file, start with an overview of every loaded file, recommend one, and ask before reading any file whole.
 
 ## History and backups

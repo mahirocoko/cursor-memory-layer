@@ -114,7 +114,7 @@ export function assertSystemCoreSize(
   }
   if (globalChars > SYSTEM_CORE_MAX_CHARS) {
     throw new Error(
-      `system/ is ${globalChars} characters; core memory is limited to ${SYSTEM_CORE_MAX_CHARS}.`,
+      `always-loaded core is ${globalChars} characters; the limit is ${SYSTEM_CORE_MAX_CHARS}.`,
     )
   }
   for (const [projectSlug, projectChars] of byProject) {

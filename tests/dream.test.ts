@@ -351,7 +351,7 @@ describe('runDream', () => {
       /- Uses pnpm\.\n- Replies in Thai\.\n- Small commits\.\n$/,
     )
     assert.match(plan.rejected[0], /old text matched 0 times/)
-    assert.match(plan.rejected[1], /would grow system\/ by \d+ characters/)
+    assert.match(plan.rejected[1], /would grow always-loaded files by \d+ characters/)
 
     const reference = planDreamOperations({
       memoryRoot,
