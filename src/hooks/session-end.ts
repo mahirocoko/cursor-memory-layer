@@ -23,7 +23,6 @@ export function reflectOnSession(
   input: HookInput,
   memoryRoot: string = getMemoryRoot(),
 ): ReflectionResult {
-  if (process.env.CURSOR_MEMORY_REFLECTION === '0') return { status: 'skipped', reason: 'disabled' }
   if (input.is_background_agent === true) return { status: 'skipped', reason: 'background agent' }
   if (!isMemoryRepository(memoryRoot))
     return { status: 'skipped', reason: 'memory not initialized' }

@@ -39,13 +39,22 @@ export function removeOwnedHooks(config: HooksConfig): HooksConfig {
   return { ...config, version: config.version ?? 1, hooks }
 }
 
+const replaceOwnedHook = (entries: HookEntry[], entry: HookEntry): HookEntry[] => {
+  const index = entries.findIndex(isOwnedHook)
+  if (index === -1) return [...entries, entry]
+  return entries.flatMap((current, currentIndex) => {
+    if (currentIndex === index) return [entry]
+    return isOwnedHook(current) ? [] : [current]
+  })
+}
+
+/** Keeps an existing memory hook in place. A first install still appends. */
 export function mergeOwnedHooks(
   config: HooksConfig,
   owned: Record<string, HookEntry>,
 ): HooksConfig {
-  const cleaned = removeOwnedHooks(config)
-  const hooks = { ...cleaned.hooks }
+  const hooks = { ...(config.hooks || {}) }
   for (const [event, entry] of Object.entries(owned))
-    hooks[event] = [...(hooks[event] || []), entry]
-  return { ...cleaned, hooks }
+    hooks[event] = replaceOwnedHook(hooks[event] || [], entry)
+  return { ...config, version: config.version ?? 1, hooks }
 }

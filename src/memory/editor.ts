@@ -22,7 +22,7 @@ export type EditOptions = {
   memoryRoot: string
   message?: string
   force?: boolean
-  /** Lines the human agreed to remove from `system/`; see {@link assertRetained}. */
+  /** Lines the human agreed to remove from an always-loaded file; see {@link assertRetained}. */
   drop?: string[]
 }
 
@@ -70,7 +70,7 @@ export function validateMemoryContent(relativePath: string, content: string): st
   }
   if (scope.tier === 'system' && content.length > SYSTEM_FILE_MAX_CHARS) {
     throw new Error(
-      `${relativePath} is ${content.length} characters; system files are limited to ${SYSTEM_FILE_MAX_CHARS}. Put detail in reference/.`,
+      `${relativePath} is ${content.length} characters; always-loaded files are limited to ${SYSTEM_FILE_MAX_CHARS}. Put detail in reference/.`,
     )
   }
   assertNoSecrets(content, relativePath)
@@ -79,7 +79,7 @@ export function validateMemoryContent(relativePath: string, content: string): st
 
 const validateDocument = validateMemoryContent
 
-/** Global `system/` plus each project's `system/` must stay within Letta's core cap. */
+/** Global always-loaded files plus one project's top-level files must stay within Letta's core cap. */
 export function assertSystemCoreSize(
   memoryRoot: string,
   overlays: Map<string, string | null>,

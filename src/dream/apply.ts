@@ -128,7 +128,7 @@ const systemGrowth = (drafts: Iterable<Draft>): number => {
 
 /**
  * Validates every proposed operation like a CLI write would and drops the ones
- * that fail, that race with newer commits, or that grow `system/` past
+ * that fail, that race with newer commits, or that grow always-loaded files past
  * {@link DREAM_SYSTEM_GROWTH_MAX_CHARS}. Operations on one file apply in order.
  * Writes nothing.
  */

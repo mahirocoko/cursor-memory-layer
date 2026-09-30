@@ -177,6 +177,33 @@ describe('doctor and palace', () => {
     assert.ok(has('ok', 'core size', /loads ~\d+ tokens/))
   })
 
+  test('doctor checks full memory paths and ignores a nested suffix', () => {
+    const memoryRoot = tempMemory()
+    writeMemory('agent-halo/reference/conventions.md', 'Use the real component API.', {
+      memoryRoot,
+      description: 'Conventions.',
+    })
+    writeMemory(
+      'human/prefs/workflow.md',
+      'See agent-halo/reference/conventions.md, human/prefs/missing.md, system/human/prefs/coding.md, and docs/guide.md.',
+      { memoryRoot, description: 'Workflow.' },
+    )
+    const findings = runDoctor({ memoryRoot, cursorHome: tempDir(), projectSlug: 'agent-halo' })
+    const links = findings
+      .filter((finding) => finding.check === 'broken link')
+      .map((finding) => finding.detail)
+    assert.equal(
+      links.some((detail) => detail.includes('reference/conventions.md')),
+      false,
+    )
+    assert.ok(links.some((detail) => detail.includes('human/prefs/missing.md')))
+    assert.ok(links.some((detail) => detail.includes('system/human/prefs/coding.md')))
+    assert.equal(
+      links.some((detail) => detail.includes('docs/guide.md')),
+      false,
+    )
+  })
+
   test('doctor flags shared wording, not files that merely share a language', () => {
     const memoryRoot = tempMemory()
     const words = (seed: string) =>

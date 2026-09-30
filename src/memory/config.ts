@@ -2,20 +2,20 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 
 /**
- * Soft budget for `system/` documents loaded every chat. It sits under the hard
- * core cap so doctor can warn before a write is rejected. The fixed contract
- * and indexes are not counted.
+ * Soft budget for always-loaded documents. It sits under the hard core cap so
+ * doctor can warn before a write is rejected. The fixed contract and indexes
+ * are not counted.
  */
 export const SYSTEM_MEMORY_BUDGET_TOKENS = 12_000
 /** Safety cut for the whole injected block; above Letta's 65,536-character core default. */
 export const ACTIVE_MEMORY_HARD_LIMIT_CHARS = 131_072
-/** Doctor warns here, before a system file is rejected at {@link SYSTEM_FILE_MAX_CHARS}. */
+/** Doctor warns here, before an always-loaded file is rejected at {@link SYSTEM_FILE_MAX_CHARS}. */
 export const SYSTEM_DOCUMENT_WARN_CHARS = 16_000
-/** Letta's per-file cap. Applies to `system/` files, including frontmatter. */
+/** Letta's per-file cap. Applies to always-loaded files, including frontmatter. */
 export const SYSTEM_FILE_MAX_CHARS = 20_000
-/** Letta's core cap. Global `system/` plus one project's `system/` files. */
+/** Letta's core cap. Global always-loaded files plus one project's top-level files. */
 export const SYSTEM_CORE_MAX_CHARS = 65_536
-/** Background reflection may grow `system/` by at most this much per run. */
+/** Background reflection may grow always-loaded files by at most this much per run. */
 export const DREAM_SYSTEM_GROWTH_MAX_CHARS = 2_000
 
 export const getCursorHome = (): string =>

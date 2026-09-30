@@ -20,7 +20,7 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 ### Memory layout
 
 ```
-MEMORY.md                   index of memory that is not already loaded
+MEMORY.md                   loaded every chat; points at notes that load on demand
 persona.md                  identity defaults; read_only, outranks model defaults
 human/                      identity and standing prefs; loaded every chat
 <project>/*.md              loaded every chat in that project
@@ -111,7 +111,7 @@ Run `cursor-memory --help` for the full list.
 
 `"model": "inherit"` uses the chat's model; any slug from `cursor-agent --list-models` pins one. Unknown slugs fall back to `fallbackModel`.
 
-Environment overrides: `CURSOR_MEMORY_DIR`, `CURSOR_HOME`, `CURSOR_PROJECTS_DIR`, `CURSOR_MEMORY_REFLECTION=0` (turn reflection off), `CURSOR_MEMORY_AGENT_COMMAND`, `CURSOR_MEMORY_DREAM_WORKSPACE`, `CURSOR_MEMORY_BACKUP_DIR`.
+Environment overrides: `CURSOR_MEMORY_DIR`, `CURSOR_HOME`, `CURSOR_PROJECTS_DIR`, `CURSOR_MEMORY_REFLECTION=0` (turn model-driven reflection off; session end still saves lasting-intent notes), `CURSOR_MEMORY_AGENT_COMMAND`, `CURSOR_MEMORY_DREAM_WORKSPACE`, `CURSOR_MEMORY_BACKUP_DIR`.
 
 Reflection bookkeeping (state, lock, logs) lives in `~/.cursor/memory/.git/cursor-memory/` and is never committed.
 

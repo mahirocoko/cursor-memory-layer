@@ -7,7 +7,7 @@ import { removeDreamTranscripts } from '../src/dream/runner.ts'
 import { readActiveConversation } from '../src/dream/state.ts'
 import { resolveTranscriptPath } from '../src/dream/trigger.ts'
 import { evaluateShellCommand } from '../src/hooks/pre-tool-use.ts'
-import { reflectOnSession } from '../src/hooks/session-end.ts'
+import { handleSessionEnd, reflectOnSession } from '../src/hooks/session-end.ts'
 import { buildSessionStartOutput } from '../src/hooks/session-start.ts'
 import { mergeOwnedHooks, removeOwnedHooks } from '../src/install/hooks-config.ts'
 import { install, uninstall } from '../src/install/installer.ts'
@@ -45,6 +45,33 @@ describe('hooks.json merge', () => {
     assert.deepEqual(mergeOwnedHooks(once, owned), once)
     assert.deepEqual(once.hooks?.sessionStart, [{ command: 'bash other.sh' }, owned.sessionStart])
     assert.deepEqual(removeOwnedHooks(once), existing)
+  })
+
+  test('replaces an owned hook where it already stands', () => {
+    const placed = {
+      hooks: {
+        preToolUse: [
+          { command: 'node other.js' },
+          {
+            command: 'node /x/cursor-memory-layer/src/hooks/pre-tool-use.ts',
+            matcher: 'Shell',
+            timeout: 5,
+          },
+          { command: 'bash trailing.sh' },
+        ],
+      },
+      version: 1,
+    }
+    const updated = {
+      command: 'node /x/cursor-memory-layer/src/hooks/pre-tool-use.ts',
+      matcher: 'Shell',
+      timeout: 9,
+    }
+    assert.deepEqual(mergeOwnedHooks(placed, { preToolUse: updated }).hooks?.preToolUse, [
+      { command: 'node other.js' },
+      updated,
+      { command: 'bash trailing.sh' },
+    ])
   })
 
   test('install and uninstall round-trip a real hooks file', () => {
@@ -167,6 +194,27 @@ describe('reflection', () => {
       /- Please never use npm here\./,
     )
     assert.equal(getMemoryLog(memoryRoot, 1)[0].subject, 'memory: reflection from bbbb2222')
+  })
+
+  test('sessionEnd still saves lasting intent when model reflection is off', () => {
+    const previous = process.env.CURSOR_MEMORY_REFLECTION
+    process.env.CURSOR_MEMORY_REFLECTION = '0'
+    try {
+      const memoryRoot = tempMemory()
+      const workspace = tempWorkspace('reflect-off')
+      const projectsDir = tempDir()
+      const durable = writeTranscript(projectsDir, 'p', 'cccc3333', [
+        transcriptLine('user', 'From now on, answer in Thai.'),
+      ])
+      const result = handleSessionEnd(
+        { transcript_path: durable, workspace_roots: [workspace], conversation_id: 'cccc3333' },
+        memoryRoot,
+      )
+      assert.equal('status' in result && result.status, 'written')
+    } finally {
+      if (previous === undefined) delete process.env.CURSOR_MEMORY_REFLECTION
+      else process.env.CURSOR_MEMORY_REFLECTION = previous
+    }
   })
 })
 

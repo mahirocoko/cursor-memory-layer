@@ -43,7 +43,23 @@ const DUPLICATE_LINE_MIN_CHARS = 24
 const SHINGLE_WORDS = 5
 const SHARED_WORDING_THRESHOLD = 0.5
 const SHARED_WORDING_MIN_SHINGLES = 30
-const PATH_REFERENCE = /\b(?:system|reference|projects|skills)\/[\w./-]+\.md\b/g
+/**
+ * Longest `.md` token in prose. The lookbehind stops `agent-halo/reference/conventions.md`
+ * from also matching the suffix `reference/conventions.md`.
+ */
+const PATH_TOKEN = /(?<![\w./-])(?:[\w.-]+\/)+[\w.-]+\.md\b/g
+/** Old layout roots stay so leftover `system/` and `projects/` links still report as missing. */
+const LINK_ROOTS = new Set(['system', 'projects', 'human', 'reference', 'skills', 'archives'])
+
+const mentionedMemoryPaths = (body: string, knownTops: Set<string>): string[] => [
+  ...new Set(
+    (body.match(PATH_TOKEN) || []).filter((token) => {
+      if (token.includes('<')) return false
+      const top = token.slice(0, token.indexOf('/'))
+      return LINK_ROOTS.has(top) || knownTops.has(top)
+    }),
+  ),
+]
 
 type LoadedFile = { relativePath: string; content: string; body: string; tier: string }
 
@@ -109,7 +125,7 @@ function checkSize(
       findings.push({
         level: 'warn',
         check: 'core size',
-        detail: `${file.relativePath} is ${file.content.length} chars, above ${SYSTEM_DOCUMENT_WARN_CHARS}; system files are rejected at ${SYSTEM_FILE_MAX_CHARS}. Groom it with /memory-groom.`,
+        detail: `${file.relativePath} is ${file.content.length} chars, above ${SYSTEM_DOCUMENT_WARN_CHARS}; always-loaded files are rejected at ${SYSTEM_FILE_MAX_CHARS}. Groom it with /memory-groom.`,
       })
     }
   }
@@ -185,10 +201,13 @@ function checkOrganization(files: LoadedFile[], findings: DoctorFinding[]) {
 
 function checkDiscoverability(files: LoadedFile[], findings: DoctorFinding[]) {
   const existing = new Set(files.map((file) => file.relativePath))
+  const knownTops = new Set(
+    files.map((file) => file.relativePath.split('/')[0]).filter((top) => !top.includes('.')),
+  )
   for (const file of files) {
     if (file.tier === 'archive') continue
-    for (const reference of new Set(file.body.match(PATH_REFERENCE) || [])) {
-      if (!existing.has(reference) && !reference.includes('<')) {
+    for (const reference of mentionedMemoryPaths(file.body, knownTops)) {
+      if (!existing.has(reference)) {
         findings.push({
           level: 'warn',
           check: 'broken link',

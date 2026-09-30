@@ -270,7 +270,7 @@ describe('runDream', () => {
         { op: 'append', path: 'human/prefs/workflow.md', body: '- Uses pnpm.' },
       ],
     })
-    assert.match(plan.rejected[0] ?? '', /system files are limited to 20000/)
+    assert.match(plan.rejected[0] ?? '', /always-loaded files are limited to 20000/)
     assert.deepEqual(
       plan.pending.map((change) => change.relativePath),
       ['human/prefs/workflow.md'],

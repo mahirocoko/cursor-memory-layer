@@ -310,7 +310,7 @@ describe('editor', () => {
           ...edit,
           description: 'Huge.',
         }),
-      /system files are limited to 20000/,
+      /always-loaded files are limited to 20000/,
     )
     const chunk = 'z'.repeat(18_000)
     for (const name of ['a', 'b', 'c']) {
