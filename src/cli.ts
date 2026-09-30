@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import { parseArgs } from 'node:util'
 import { joinOptionValues } from './cli-args.ts'
 import { runDream } from './dream/runner.ts'
-import { readDreamLog } from './dream/state.ts'
+import { readActiveConversation, readDreamLog } from './dream/state.ts'
 import {
   createBackup,
   diffMemory,
@@ -283,7 +283,7 @@ function main(argv: string[]): void {
       const transcripts = listTranscriptFiles(
         getCursorProjectsDir(),
         projectKey,
-        process.env.CURSOR_CONVERSATION_ID,
+        process.env.CURSOR_CONVERSATION_ID || readActiveConversation(memoryRoot) || undefined,
       )
         .filter(
           (file) => path.basename(path.dirname(path.dirname(path.dirname(file)))) !== dreamKey,

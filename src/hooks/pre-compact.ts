@@ -8,14 +8,15 @@ import { type HookInput, isDirectInvocation, runHook } from './io.ts'
 export function handlePreCompact(
   input: HookInput,
   memoryRoot: string = getMemoryRoot(),
-): { user_message?: string } {
+): { user_message?: string; additional_context?: string } {
   const decision = evaluateDreamTrigger(input, 'compaction', {
     memoryRoot,
     settings: loadSettings().reflection,
   })
   if (!decision.fire) return {}
   launchDetachedDream(decision.job, memoryRoot)
-  return { user_message: 'Cursor Memory is reflecting on this chat in the background.' }
+  const notice = 'Cursor Memory is reflecting on this chat in the background.'
+  return { user_message: notice, additional_context: notice }
 }
 
 if (isDirectInvocation(import.meta.url)) runHook((input) => handlePreCompact(input))

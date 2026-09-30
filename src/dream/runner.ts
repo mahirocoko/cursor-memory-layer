@@ -2,12 +2,12 @@ import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { getDreamWorkspace } from '../memory/config.ts'
+import { getCursorProjectsDir, getDreamWorkspace } from '../memory/config.ts'
 import { resolveProjectSlug } from '../memory/identity.ts'
 import { REFLECTION_COMMIT_PREFIX } from '../memory/projection.ts'
 import { getMemoryHeadRevision, getMemoryRepositoryStatus } from '../memory/repository.ts'
 import type { ReflectionSettings } from '../memory/settings.ts'
-import { readTranscript } from '../recall/transcripts.ts'
+import { cursorProjectKey, readTranscript } from '../recall/transcripts.ts'
 import { applyDreamOperations, planDreamOperations } from './apply.ts'
 import {
   buildDreamPrompt,
@@ -72,8 +72,19 @@ export function resolveAgentCommand(command: string): string {
   return command
 }
 
+/** Cursor writes a transcript for the dream child. Recall must not search those. */
+export function removeDreamTranscripts(): void {
+  const transcripts = path.join(
+    getCursorProjectsDir(),
+    cursorProjectKey(getDreamWorkspace()),
+    'agent-transcripts',
+  )
+  fs.rmSync(transcripts, { recursive: true, force: true })
+}
+
 export const runCursorAgent: AgentRunner = (input) => {
   fs.mkdirSync(input.workspace, { recursive: true })
+  removeDreamTranscripts()
   const result = spawnSync(
     resolveAgentCommand(input.agentCommand),
     [
@@ -98,6 +109,7 @@ export const runCursorAgent: AgentRunner = (input) => {
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   )
+  removeDreamTranscripts()
   if (result.error) return { ok: false, error: result.error.message }
   const line = result.stdout
     .split('\n')

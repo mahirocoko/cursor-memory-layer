@@ -172,6 +172,24 @@ export function readDreamLog(memoryRoot: string, limit = 20): DreamLogEntry[] {
   }
 }
 
+const activeConversationPath = (memoryRoot: string): string =>
+  path.join(dreamStateDir(memoryRoot), 'active-conversation')
+
+/** The chat that last started here. Recall uses this when the shell has no conversation id. */
+export function rememberActiveConversation(memoryRoot: string, conversationId: string): void {
+  fs.mkdirSync(dreamStateDir(memoryRoot), { recursive: true })
+  fs.writeFileSync(activeConversationPath(memoryRoot), `${conversationId}\n`)
+}
+
+export function readActiveConversation(memoryRoot: string): string | null {
+  try {
+    const id = fs.readFileSync(activeConversationPath(memoryRoot), 'utf-8').trim()
+    return id || null
+  } catch {
+    return null
+  }
+}
+
 export function isDreamSession(workspace: string | null): boolean {
   if (process.env.CURSOR_MEMORY_DREAM_CHILD === '1') return true
   if (!workspace) return false

@@ -3,8 +3,12 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { describe, test } from 'node:test'
+import { removeDreamTranscripts } from '../src/dream/runner.ts'
+import { readActiveConversation } from '../src/dream/state.ts'
+import { resolveTranscriptPath } from '../src/dream/trigger.ts'
 import { evaluateShellCommand } from '../src/hooks/pre-tool-use.ts'
 import { reflectOnSession } from '../src/hooks/session-end.ts'
+import { buildSessionStartOutput } from '../src/hooks/session-start.ts'
 import { mergeOwnedHooks, removeOwnedHooks } from '../src/install/hooks-config.ts'
 import { install, uninstall } from '../src/install/installer.ts'
 import { getMemoryLog, readCommittedMemoryFile } from '../src/memory/repository.ts'
@@ -163,6 +167,61 @@ describe('reflection', () => {
       /- Please never use npm here\./,
     )
     assert.equal(getMemoryLog(memoryRoot, 1)[0].subject, 'memory: reflection from bbbb2222')
+  })
+})
+
+describe('session and dream bookkeeping', () => {
+  test('sessionStart remembers the conversation when the shell cannot', () => {
+    const memoryRoot = tempMemory()
+    buildSessionStartOutput(
+      { workspace_roots: [tempWorkspace('app')], conversation_id: 'chat-1' },
+      memoryRoot,
+    )
+    assert.equal(readActiveConversation(memoryRoot), 'chat-1')
+  })
+
+  test('preCompact finds the transcript when Cursor sends a null path', () => {
+    const projectsDir = tempDir()
+    const workspace = '/Users/me/app'
+    const previous = process.env.CURSOR_PROJECTS_DIR
+    process.env.CURSOR_PROJECTS_DIR = projectsDir
+    try {
+      const file = writeTranscript(projectsDir, cursorProjectKey(workspace), 'conv-9', [
+        transcriptLine('user', '<user_query>\nRemember the staging port.\n</user_query>'),
+      ])
+      assert.equal(
+        resolveTranscriptPath({
+          conversation_id: 'conv-9',
+          workspace_roots: [workspace],
+          transcript_path: null,
+        }),
+        file,
+      )
+    } finally {
+      if (previous === undefined) delete process.env.CURSOR_PROJECTS_DIR
+      else process.env.CURSOR_PROJECTS_DIR = previous
+    }
+  })
+
+  test('dream transcripts are removed so recall cannot index them', () => {
+    const projectsDir = tempDir()
+    const workspace = tempDir()
+    const previousProjects = process.env.CURSOR_PROJECTS_DIR
+    const previousDream = process.env.CURSOR_MEMORY_DREAM_WORKSPACE
+    process.env.CURSOR_PROJECTS_DIR = projectsDir
+    process.env.CURSOR_MEMORY_DREAM_WORKSPACE = workspace
+    try {
+      const file = writeTranscript(projectsDir, cursorProjectKey(workspace), 'dream-chat', [
+        transcriptLine('user', 'reflector scratch'),
+      ])
+      removeDreamTranscripts()
+      assert.equal(fs.existsSync(file), false)
+    } finally {
+      if (previousProjects === undefined) delete process.env.CURSOR_PROJECTS_DIR
+      else process.env.CURSOR_PROJECTS_DIR = previousProjects
+      if (previousDream === undefined) delete process.env.CURSOR_MEMORY_DREAM_WORKSPACE
+      else process.env.CURSOR_MEMORY_DREAM_WORKSPACE = previousDream
+    }
   })
 })
 
