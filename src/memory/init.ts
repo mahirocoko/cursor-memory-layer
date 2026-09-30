@@ -14,45 +14,64 @@ export type InitMemoryResult = {
   sha?: string
 }
 
-type Seed = { path: string; description: string; body: string; readOnly?: boolean }
+type Seed = { path: string; description: string; body: string; readOnly?: boolean; index?: boolean }
+
+const rootIndex = `# MEMORY.md
+
+Deferred notes live under \`reference/\` and under each project's nested files. Read a file when its description matches the task.
+`
 
 const globalSeeds: Seed[] = [
   {
-    path: 'system/persona.md',
+    path: 'MEMORY.md',
+    description: '',
+    index: true,
+    body: rootIndex.trim(),
+  },
+  {
+    path: 'persona.md',
     description: 'Who I am as the Cursor agent.',
     readOnly: true,
     body: 'I am the Cursor agent for this human. I carry this memory across chats and keep it accurate myself.',
   },
   {
-    path: 'system/human/identity.md',
+    path: 'human/identity.md',
     description: 'Stable facts the human has told me about themselves.',
     body: '- (nothing recorded yet)',
   },
   {
-    path: 'system/human/prefs/communication.md',
+    path: 'human/prefs/communication.md',
     description: 'How the human wants me to talk to them: language, length, tone, and format.',
     body: '- (nothing recorded yet)',
   },
   {
-    path: 'system/human/prefs/coding.md',
+    path: 'human/prefs/coding.md',
     description: 'How the human wants code written and reviewed when the repository is silent.',
     body: '- (nothing recorded yet)',
   },
   {
-    path: 'system/human/prefs/workflow.md',
+    path: 'human/prefs/workflow.md',
     description: 'How the human wants work run: approvals, verification, tools, and handoffs.',
     body: '- (nothing recorded yet)',
   },
 ]
 
-const projectSeed = (projectSlug: string, workspacePath: string): Seed => ({
-  path: `projects/${projectSlug}/system/overview.md`,
-  description: `What the ${projectSlug} project is and the facts that matter in every chat about it.`,
-  body: [
-    `- Workspace: ${resolveGitRoot(workspacePath) || workspacePath}`,
-    '- (add architecture, conventions, and gotchas as they are confirmed)',
-  ].join('\n'),
-})
+const projectSeeds = (projectSlug: string, workspacePath: string): Seed[] => [
+  {
+    path: `${projectSlug}/MEMORY.md`,
+    description: '',
+    index: true,
+    body: `# MEMORY.md\n\nFiles in this directory load every chat in ${projectSlug}. Nested files load on demand.\n`,
+  },
+  {
+    path: `${projectSlug}/overview.md`,
+    description: `What the ${projectSlug} project is and the facts that matter in every chat about it.`,
+    body: [
+      `- Workspace: ${resolveGitRoot(workspacePath) || workspacePath}`,
+      '- (add architecture, conventions, and gotchas as they are confirmed)',
+    ].join('\n'),
+  },
+]
 
 export function initMemory(
   memoryRoot: string,
@@ -60,12 +79,13 @@ export function initMemory(
 ): InitMemoryResult {
   const created = initMemoryRepository(memoryRoot)
   const seeds = project
-    ? [...globalSeeds, projectSeed(project.slug, project.workspacePath)]
+    ? [...globalSeeds, ...projectSeeds(project.slug, project.workspacePath)]
     : globalSeeds
   const seededPaths: string[] = []
   for (const seed of seeds) {
     if (fs.existsSync(resolveMemoryPath(memoryRoot, seed.path).absolutePath)) continue
-    writeMemoryFile(memoryRoot, seed.path, renderMemoryDocument(seed))
+    const content = seed.index ? `${seed.body.trim()}\n` : renderMemoryDocument(seed)
+    writeMemoryFile(memoryRoot, seed.path, content)
     seededPaths.push(seed.path)
   }
   if (seededPaths.length === 0) return { created, seededPaths }

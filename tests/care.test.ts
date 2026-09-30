@@ -105,7 +105,7 @@ describe('backup, restore, export, diff', () => {
     const out = path.join(tempDir(), 'export')
     const result = exportMemory(memoryRoot, out)
     assert.ok(result.files >= 3)
-    assert.ok(fs.existsSync(path.join(out, 'system', 'persona.md')))
+    assert.ok(fs.existsSync(path.join(out, 'persona.md')))
     assert.equal(fs.existsSync(path.join(out, '.git')), false)
     assert.throws(() => exportMemory(memoryRoot, out), /not empty/)
   })
@@ -215,8 +215,8 @@ describe('doctor and palace', () => {
       memoryRoot,
       description: 'HTML.',
     })
-    writeMemory('projects/x/system/overview.md', 'X fact', { memoryRoot, description: 'X.' })
-    writeMemory('projects/y/system/overview.md', 'Y fact', { memoryRoot, description: 'Y.' })
+    writeMemory('x/overview.md', 'X fact', { memoryRoot, description: 'X.' })
+    writeMemory('y/overview.md', 'Y fact', { memoryRoot, description: 'Y.' })
     const out = writePalace(memoryRoot, 'x', path.join(tempDir(), 'palace.html'))
     const html = fs.readFileSync(out, 'utf-8')
     assert.equal((fs.statSync(out).mode & 0o777).toString(8), '600')
@@ -225,9 +225,9 @@ describe('doctor and palace', () => {
     const data = JSON.parse(json) as ReturnType<typeof collectPalaceData>
     const file = (filePath: string) => data.files.find((entry) => entry.path === filePath)
     assert.equal(file('reference/html.md')?.loaded, false)
-    assert.equal(file('projects/x/system/overview.md')?.loaded, true)
-    assert.equal(file('projects/y/system/overview.md')?.loaded, false)
-    assert.ok(data.files.some((entry) => entry.loaded && entry.path.startsWith('system/')))
+    assert.equal(file('x/overview.md')?.loaded, true)
+    assert.equal(file('y/overview.md')?.loaded, false)
+    assert.ok(data.files.some((entry) => entry.loaded && entry.path === 'persona.md'))
     assert.match(file('reference/html.md')?.lastCommit?.subject ?? '', /reference\/html\.md/)
     assert.ok(data.commits.length >= 2)
     assert.ok(data.commits.some((commit) => commit.diff?.includes('Contains')))

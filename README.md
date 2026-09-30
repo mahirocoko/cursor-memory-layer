@@ -9,7 +9,7 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 | Piece | What it does |
 |---|---|
 | `~/.cursor/memory` | Separate git repo holding Markdown memory files. Never pushed anywhere unless you add a mirror. |
-| `sessionStart` hook | Injects `system/` and `projects/<slug>/system/`, file descriptions for `reference/`, memory skills, and the last reflection into every new chat. |
+| `sessionStart` hook | Injects `persona.md`, `human/`, `MEMORY.md`, this project's top-level files, file descriptions for deferred memory, memory skills, and the last reflection into every new chat. |
 | `cursor-memory` CLI + skill | How the agent reads, searches, and edits memory. Each write is a path-scoped commit that is checked for layout, frontmatter, size, and secrets. |
 | `stop`, `preCompact`, `sessionEnd` hooks | Start a detached reflection after about 25 assistant replies, before context compaction, and when a chat with at least 4 new user messages ends. |
 | `preToolUse` hook | Asks the human before destructive `git` or `rm -r` commands against the memory repo. |
@@ -20,12 +20,11 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 ### Memory layout
 
 ```
-system/                     loaded into every chat (Letta-style core; doctor warns past ~12,000 tokens, writes stop at 20,000 per file and 65,536 for the loaded core)
-  human/prefs/              communication.md, coding.md, workflow.md
-  human/identity.md         facts the human shared about themselves
-  persona.md                identity defaults; read_only, outranks model defaults
-projects/<slug>/system/     loaded into every chat in that project
-projects/<slug>/reference/  loaded on demand, by description
+MEMORY.md                   index of memory that is not already loaded
+persona.md                  identity defaults; read_only, outranks model defaults
+human/                      identity and standing prefs; loaded every chat
+<project>/*.md              loaded every chat in that project
+<project>/…                 nested files loaded on demand
 reference/                  loaded on demand, by description
 skills/<name>/SKILL.md      procedures the agent wrote for itself
 archives/                   never loaded
@@ -72,7 +71,7 @@ With `approvalMode: allowlist`, the agent asks before every `cursor-memory` comm
 
 ```bash
 cursor-memory show                    # exactly what a new chat receives here
-cursor-memory append system/human/prefs/communication.md --body "- Replies in Thai."
+cursor-memory append human/prefs/communication.md --body "- Replies in Thai."
 cursor-memory search pnpm
 cursor-memory recall "deploy wrangler" --project
 cursor-memory log --limit 10

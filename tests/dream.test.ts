@@ -47,7 +47,7 @@ describe('dream response contract', () => {
       reply({
         summary: '  Saved   pnpm preference ',
         operations: [
-          { op: 'write', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
+          { op: 'write', path: 'human/prefs/workflow.md', body: '- Uses pnpm.' },
           { op: 'delete', path: 'reference/old.md' },
         ],
       }),
@@ -82,26 +82,23 @@ describe('dream response contract', () => {
       /general rule that makes future chats act better, not a record of the event/,
     )
     assert.match(prompt, /why the assistant forgot or ignored something, find the cause/)
-    assert.match(
-      prompt,
-      /already in `system\/`, make it clearer or more specific instead of adding a second copy/,
-    )
+    assert.match(prompt, /already in `persona\.md`, `human\/`, or the project directory/)
     assert.match(prompt, /Never record a claim, plan, or guess that only the assistant made/)
     assert.doesNotMatch(prompt, /Record only what the human said or confirmed/)
     assert.match(
       prompt,
       /A request that shapes one reply \(tone, format, length\) is not a standing preference/,
     )
-    assert.match(prompt, /Never touch files marked \(read_only\), including `system\/persona\.md`/)
-    assert.match(prompt, /`system\/human\/prefs\/`, which reflection may edit/)
-    assert.match(prompt, /grow `system\/` by at most 2000 characters/)
+    assert.match(prompt, /Never touch files marked \(read_only\), including `persona\.md`/)
+    assert.match(prompt, /`human\/prefs\/`, which reflection may edit/)
+    assert.match(prompt, /at most 2000 characters/)
     assert.match(prompt, /Touch at most one skill per reflection/)
     assert.match(prompt, /At most 8 operations\./)
     for (const op of ['replace', 'append', 'write', 'delete']) {
       assert.match(prompt, new RegExp(`"op": "${op}"`))
     }
     assert.doesNotMatch(prompt, /"op": "(?:update|extend|deprecate|split|create|none)"/)
-    assert.doesNotMatch(prompt, /\$MEMORY_DIR|ARCHIVE\.md|MEMORY\.md|deprecated: true|git commit/)
+    assert.doesNotMatch(prompt, /\$MEMORY_DIR|ARCHIVE\.md|deprecated: true|git commit/)
   })
 })
 
@@ -136,7 +133,7 @@ describe('runDream', () => {
               operations: [
                 {
                   op: 'write',
-                  path: 'system/human/prefs/workflow.md',
+                  path: 'human/prefs/workflow.md',
                   body: '- Uses pnpm, not npm.',
                 },
                 {
@@ -160,22 +157,16 @@ describe('runDream', () => {
     assert.equal(prompts[0].model, 'auto')
     assert.equal(prompts[0].workspace, process.env.CURSOR_MEMORY_DREAM_WORKSPACE)
     assert.match(prompts[0].prompt, /Question 2: from now on use pnpm/)
-    assert.match(prompts[0].prompt, /### system\/human\/prefs\/workflow\.md/)
+    assert.match(prompts[0].prompt, /### human\/prefs\/workflow\.md/)
     assert.match(prompts[0].prompt, /### reference\/locked\.md \(read_only\)/)
-    assert.match(prompts[0].prompt, /### system\/persona\.md \(read_only\)/)
-    assert.doesNotMatch(prompts[0].prompt, /`system\/persona\.md`: every chat/)
+    assert.match(prompts[0].prompt, /### persona\.md \(read_only\)/)
+    assert.doesNotMatch(prompts[0].prompt, /`persona\.md`: every chat/)
     assert.equal(outcome.rejected?.length, 3)
 
     const commit = getMemoryLog(memoryRoot, 1)[0]
     assert.equal(commit.subject, 'memory(reflection): Prefers pnpm')
-    assert.deepEqual(commit.paths.sort(), [
-      'skills/release/SKILL.md',
-      'system/human/prefs/workflow.md',
-    ])
-    assert.match(
-      readCommittedMemoryFile(memoryRoot, 'system/human/prefs/workflow.md') || '',
-      /Uses pnpm/,
-    )
+    assert.deepEqual(commit.paths.sort(), ['human/prefs/workflow.md', 'skills/release/SKILL.md'])
+    assert.match(readCommittedMemoryFile(memoryRoot, 'human/prefs/workflow.md') || '', /Uses pnpm/)
     assert.match(
       readCommittedMemoryFile(memoryRoot, 'skills/release/SKILL.md') || '',
       /^---\nname: release\n/,
@@ -220,7 +211,7 @@ describe('runDream', () => {
           text: reply({
             summary: 'Prefers pnpm',
             operations: [
-              { op: 'write', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
+              { op: 'write', path: 'human/prefs/workflow.md', body: '- Uses pnpm.' },
               { op: 'write', path: 'archives/x.md', body: '- nope' },
             ],
           }),
@@ -228,7 +219,7 @@ describe('runDream', () => {
       },
     )
     assert.equal(outcome.status, 'dry-run')
-    assert.deepEqual(outcome.planned, ['system/human/prefs/workflow.md'])
+    assert.deepEqual(outcome.planned, ['human/prefs/workflow.md'])
     assert.equal(outcome.operations?.length, 2)
     assert.equal(outcome.rejected?.length, 1)
     assert.equal(getMemoryLog(memoryRoot, 1)[0].sha, head)
@@ -272,17 +263,17 @@ describe('runDream', () => {
       operations: [
         {
           op: 'write',
-          path: 'projects/app/system/huge.md',
+          path: 'app/huge.md',
           description: 'Huge.',
           body: 'x'.repeat(20_000),
         },
-        { op: 'append', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
+        { op: 'append', path: 'human/prefs/workflow.md', body: '- Uses pnpm.' },
       ],
     })
     assert.match(plan.rejected[0] ?? '', /system files are limited to 20000/)
     assert.deepEqual(
       plan.pending.map((change) => change.relativePath),
-      ['system/human/prefs/workflow.md'],
+      ['human/prefs/workflow.md'],
     )
   })
 
@@ -293,23 +284,23 @@ describe('runDream', () => {
       memoryRoot,
       baseRevision,
       operations: [
-        { op: 'append', path: 'system/persona.md', body: '- Drifted.' },
-        { op: 'append', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
+        { op: 'append', path: 'persona.md', body: '- Drifted.' },
+        { op: 'append', path: 'human/prefs/workflow.md', body: '- Uses pnpm.' },
       ],
     })
-    assert.deepEqual(plan.rejected, ['system/persona.md: read_only'])
+    assert.deepEqual(plan.rejected, ['persona.md: read_only'])
     assert.deepEqual(
       plan.pending.map((change) => change.relativePath),
-      ['system/human/prefs/workflow.md'],
+      ['human/prefs/workflow.md'],
     )
   })
 
   test('rejects writes that drop most of a file unless the lines move elsewhere', () => {
     const memoryRoot = tempMemory()
     const lines = ['- Uses pnpm.', '- Replies in Thai.', '- Small commits.', '- Tabs, not spaces.']
-    writeMemory('system/human/prefs/workflow.md', lines.join('\n'), { memoryRoot })
+    writeMemory('human/prefs/workflow.md', lines.join('\n'), { memoryRoot })
     const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
-    const shrink = { op: 'write' as const, path: 'system/human/prefs/workflow.md', body: lines[0] }
+    const shrink = { op: 'write' as const, path: 'human/prefs/workflow.md', body: lines[0] }
 
     const dropped = planDreamOperations({ memoryRoot, baseRevision, operations: [shrink] })
     assert.equal(dropped.pending.length, 0)
@@ -341,9 +332,9 @@ describe('runDream', () => {
 
   test('replace and append apply in order, and system growth per reflection is capped', () => {
     const memoryRoot = tempMemory()
-    writeMemory('system/human/prefs/workflow.md', '- Uses npm.\n- Replies in Thai.', { memoryRoot })
+    writeMemory('human/prefs/workflow.md', '- Uses npm.\n- Replies in Thai.', { memoryRoot })
     const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
-    const path = 'system/human/prefs/workflow.md'
+    const path = 'human/prefs/workflow.md'
     const plan = planDreamOperations({
       memoryRoot,
       baseRevision,
@@ -387,7 +378,7 @@ describe('runDream', () => {
       '- Commit messages use Conventional Commits.',
       '- Visual acceptance stays with the human.',
     ]
-    const path = 'system/human/prefs/workflow.md'
+    const path = 'human/prefs/workflow.md'
     writeMemory(path, facts.join('\n'), { memoryRoot })
     const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
     const trim = { op: 'replace' as const, path, old: facts.slice(3).join('\n'), new: '' }
@@ -416,7 +407,7 @@ describe('runDream', () => {
     const plan = planDreamOperations({
       memoryRoot,
       baseRevision,
-      operations: [{ op: 'write', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' }],
+      operations: [{ op: 'write', path: 'human/prefs/workflow.md', body: '- Uses pnpm.' }],
     })
     assert.deepEqual(plan.rejected, [])
   })
@@ -435,16 +426,14 @@ describe('runDream', () => {
         memoryRoot,
         settings: settings(),
         runAgent: () => {
-          writeMemory('system/human/prefs/workflow.md', '- Written by the live chat.', {
+          writeMemory('human/prefs/workflow.md', '- Written by the live chat.', {
             memoryRoot,
           })
           return {
             ok: true,
             text: reply({
               summary: 'late',
-              operations: [
-                { op: 'write', path: 'system/human/prefs/workflow.md', body: '- Stale.' },
-              ],
+              operations: [{ op: 'write', path: 'human/prefs/workflow.md', body: '- Stale.' }],
             }),
           }
         },
@@ -452,10 +441,7 @@ describe('runDream', () => {
     )
     assert.equal(outcome.status, 'no-change')
     assert.match(outcome.rejected?.[0] || '', /changed in memory after the reflection snapshot/)
-    assert.match(
-      readCommittedMemoryFile(memoryRoot, 'system/human/prefs/workflow.md') || '',
-      /live chat/,
-    )
+    assert.match(readCommittedMemoryFile(memoryRoot, 'human/prefs/workflow.md') || '', /live chat/)
   })
 
   test('failures back off and leave the transcript unreflected', () => {

@@ -25,9 +25,9 @@ describe('status line memory segment', () => {
     fs.mkdirSync(stateDir, { recursive: true })
     assert.match(render(memoryRoot), /🧠✓(?! ↻)/)
 
-    fs.writeFileSync(path.join(memoryRoot, 'system', 'scratch.md'), 'x')
+    fs.writeFileSync(path.join(memoryRoot, 'human', 'scratch.md'), 'x')
     assert.match(render(memoryRoot), /🧠\+1/)
-    fs.rmSync(path.join(memoryRoot, 'system', 'scratch.md'))
+    fs.rmSync(path.join(memoryRoot, 'human', 'scratch.md'))
 
     fs.writeFileSync(
       path.join(stateDir, 'dream.log'),

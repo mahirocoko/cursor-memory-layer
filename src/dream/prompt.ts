@@ -9,7 +9,7 @@
 import { DREAM_SYSTEM_GROWTH_MAX_CHARS } from '../memory/config.ts'
 import { parseMemoryDocument } from '../memory/document.ts'
 import { listCommittedMemoryFiles, readCommittedMemoryFile } from '../memory/repository.ts'
-import { isSkillEntryPath, requiresFrontmatter } from '../memory/scope.ts'
+import { classifyMemoryPath, isSkillEntryPath, requiresFrontmatter } from '../memory/scope.ts'
 import type { TranscriptMessage } from '../recall/transcripts.ts'
 
 export type DreamOperation =
@@ -34,12 +34,31 @@ const clip = (text: string, max: number): string =>
 
 export function buildMemorySnapshot(memoryRoot: string, projectSlug: string): string {
   const all = listCommittedMemoryFiles(memoryRoot, '')
+  const scopeOf = (file: string) => {
+    try {
+      return classifyMemoryPath(file)
+    } catch {
+      return null
+    }
+  }
   const inlineOrder = [
-    (file: string) => file.startsWith(`projects/${projectSlug}/system/`),
-    (file: string) => file.startsWith('system/'),
-    (file: string) => file.startsWith(`projects/${projectSlug}/reference/`),
+    (file: string) => {
+      const scope = scopeOf(file)
+      return scope?.tier === 'system' && scope.projectSlug === projectSlug
+    },
+    (file: string) => {
+      const scope = scopeOf(file)
+      return scope?.tier === 'system' && scope.projectSlug === null
+    },
+    (file: string) => {
+      const scope = scopeOf(file)
+      return scope?.tier === 'reference' && scope.projectSlug === projectSlug
+    },
     (file: string) => isSkillEntryPath(file),
-    (file: string) => file.startsWith('reference/'),
+    (file: string) => {
+      const scope = scopeOf(file)
+      return scope?.tier === 'reference' && scope.projectSlug === null
+    },
   ]
   const ordered = inlineOrder.flatMap((matches) => all.filter(matches))
   const sections: string[] = []
@@ -104,7 +123,7 @@ In priority order:
 4. Anything in the excerpt that contradicts current memory.
 5. A repeatable multi-step procedure worth reusing, as a skill.
 
-When the human asks why the assistant forgot or ignored something, find the cause in the memory below before writing. If the rule is missing, add it. If a stale line says otherwise, fix that line. If the rule is already in \`system/\`, make it clearer or more specific instead of adding a second copy. If it sits in \`reference/\` behind a vague description, sharpen the description or move the rule into \`system/\` within the growth limit. The memory below is the current committed state and may be newer than what that chat loaded.
+When the human asks why the assistant forgot or ignored something, find the cause in the memory below before writing. If the rule is missing, add it. If a stale line says otherwise, fix that line. If the rule is already in \`persona.md\`, \`human/\`, or the project directory, make it clearer or more specific instead of adding a second copy. If it sits in \`reference/\` or a nested project file behind a vague description, sharpen the description or move the rule into the always-loaded files within the growth limit. The memory below is the current committed state and may be newer than what that chat loaded.
 
 ## Rules
 - Most conversations need no change. Zero operations is a normal, good answer.
@@ -114,17 +133,17 @@ When the human asks why the assistant forgot or ignored something, find the caus
 - Record commands, ports, versions, and paths exactly as the human stated them or as the conversation showed them working. Never derive one the conversation did not show.
 - Resolve contradictions at the source: rewrite the stale line instead of appending a conflicting one. If the new facts make part of a line wrong and the correct value is unknown, remove that part rather than keep or guess it. Deduplicate.
 - Prefer updating an existing file on the same subject over creating a new one; create a file only for a clearly separate topic.
-- Everything in \`system/\` and \`projects/${slug}/system/\` is loaded into every chat, so each line there costs every future chat. One reflection may grow \`system/\` by at most ${DREAM_SYSTEM_GROWTH_MAX_CHARS} characters in total; put longer additions in \`reference/\` with a precise description.
+- Everything in \`persona.md\`, \`human/\`, \`MEMORY.md\`, and \`${slug}/*.md\` is loaded into every chat here, so each line there costs every future chat. One reflection may grow those files by at most ${DREAM_SYSTEM_GROWTH_MAX_CHARS} characters in total; put longer additions in \`reference/\` or a nested project file with a precise description.
 - To change an existing file, prefer \`replace\` (an exact \`old\` passage that appears once, and its \`new\` text) or \`append\`. Use \`write\` only for a new file or to rewrite a short one.
 - Touch at most one skill per reflection, and prefer changing an existing one: fix a wrong or outdated step with \`replace\`; add a new variant or edge case with \`append\` as its own section; \`delete\` a skill that is obsolete or harmful; \`write\` a new skill only for a novel, repeatable procedure with concrete commands that no listed skill covers even partly. When unsure, change no skill.
 - Never store secrets, credentials, tokens, private URLs, or long transcript quotes.
-- Never touch files marked (read_only), including \`system/persona.md\` (the agent's identity). Persona changes happen in chat with the human's agreement; if the excerpt shows the human asking for one, leave it to the chat. A correction about how the agent should behave goes in \`system/human/prefs/\`, which reflection may edit. Never write under \`archives/\`.
+- Never touch files marked (read_only), including \`persona.md\` (the agent's identity). Persona changes happen in chat with the human's agreement; if the excerpt shows the human asking for one, leave it to the chat. A correction about how the agent should behave goes in \`human/prefs/\`, which reflection may edit. Never write under \`archives/\`.
 - Write in the language the existing memory uses for that file; English when new.
 
 ## Where things go
-- \`system/human/prefs/communication.md\`, \`system/human/prefs/coding.md\`, \`system/human/prefs/workflow.md\`, \`system/human/identity.md\`: every chat, every project. Do not edit \`system/persona.md\`; identity changes happen in chat with the human.
-- \`projects/${slug}/system/<topic>.md\`: every chat in this project.
-- \`reference/<topic>.md\`, \`projects/${slug}/reference/<topic>.md\`: loaded on demand by description.
+- \`human/prefs/communication.md\`, \`human/prefs/coding.md\`, \`human/prefs/workflow.md\`, \`human/identity.md\`: every chat, every project. Do not edit \`persona.md\`; identity changes happen in chat with the human.
+- \`${slug}/<topic>.md\`: every chat in this project. \`${slug}/MEMORY.md\` is the index of what is not loaded.
+- \`reference/<topic>.md\` and nested files under \`${slug}/\` load on demand by description.
 - \`skills/<lowercase-name>/SKILL.md\`: a procedure the agent should follow when its description matches.
 
 ## Current memory (committed revision ${options.revision.slice(0, 8)})

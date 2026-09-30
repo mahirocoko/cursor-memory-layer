@@ -202,7 +202,7 @@ function checkDiscoverability(files: LoadedFile[], findings: DoctorFinding[]) {
     findings.push({
       level: 'ok',
       check: 'archives',
-      detail: `${notes} reflection note(s) in archives/; promote confirmed ones into system/ or delete stale ones.`,
+      detail: `${notes} reflection note(s) in archives/; promote confirmed ones into human/ or the project directory, or delete stale ones.`,
     })
   }
 }

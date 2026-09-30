@@ -111,7 +111,17 @@ function collectFiles(memoryRoot: string, loadedPaths: Set<string>): PalaceFile[
     let tier = 'other'
     try {
       tier = classifyMemoryPath(relativePath).tier
-      if (relativePath.startsWith('projects/')) tier = `project-${tier}`
+      if (
+        tier !== 'archive' &&
+        tier !== 'skill' &&
+        !relativePath.startsWith('human/') &&
+        relativePath !== 'persona.md' &&
+        relativePath !== 'MEMORY.md' &&
+        !relativePath.startsWith('reference/') &&
+        !relativePath.startsWith('archives/')
+      ) {
+        tier = `project-${tier}`
+      }
     } catch {}
     const parsed = requiresFrontmatter(relativePath)
       ? parseMemoryDocument(content, relativePath)

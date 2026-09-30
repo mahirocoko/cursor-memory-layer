@@ -78,7 +78,7 @@ export function writeReflectionNote(options: {
   const body = [
     `Conversation \`${options.conversationId}\` on ${now.toISOString()}.`,
     '',
-    'Statements of lasting intent from the human, verbatim. Review them and promote confirmed ones into `system/` with `cursor-memory`:',
+    'Statements of lasting intent from the human, verbatim. Review them and promote confirmed ones into `human/` or the project directory with `cursor-memory`:',
     '',
     ...intents.map((intent) => `- ${intent}`),
   ].join('\n')

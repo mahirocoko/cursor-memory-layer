@@ -40,11 +40,14 @@ describe('parseMemoryDocument', () => {
 
 describe('classifyMemoryPath', () => {
   test('accepts the supported tiers', () => {
-    assert.equal(classifyMemoryPath('system/human/prefs.md').tier, 'system')
+    assert.equal(classifyMemoryPath('persona.md').tier, 'system')
+    assert.equal(classifyMemoryPath('MEMORY.md').tier, 'system')
+    assert.equal(classifyMemoryPath('human/prefs.md').tier, 'system')
+    assert.equal(classifyMemoryPath('app/reference/deploy.md').tier, 'reference')
     assert.equal(classifyMemoryPath('reference/a.md').tier, 'reference')
     assert.equal(classifyMemoryPath('archives/x/y.md').tier, 'archive')
-    assert.deepEqual(classifyMemoryPath('projects/my-app/system/overview.md'), {
-      relativePath: 'projects/my-app/system/overview.md',
+    assert.deepEqual(classifyMemoryPath('my-app/overview.md'), {
+      relativePath: 'my-app/overview.md',
       tier: 'system',
       projectSlug: 'my-app',
     })
@@ -54,7 +57,6 @@ describe('classifyMemoryPath', () => {
     for (const bad of [
       '../x.md',
       '/abs/system/a.md',
-      'notes/a.md',
       'system/a.txt',
       'system',
       '.git/config.md',

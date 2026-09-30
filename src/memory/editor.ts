@@ -121,7 +121,7 @@ export function assertSystemCoreSize(
     const total = globalChars + projectChars
     if (total > SYSTEM_CORE_MAX_CHARS) {
       throw new Error(
-        `system/ plus projects/${projectSlug}/system/ is ${total} characters; core memory is limited to ${SYSTEM_CORE_MAX_CHARS}.`,
+        `persona.md, human/, and ${projectSlug}/ are ${total} characters together; core memory is limited to ${SYSTEM_CORE_MAX_CHARS}.`,
       )
     }
   }

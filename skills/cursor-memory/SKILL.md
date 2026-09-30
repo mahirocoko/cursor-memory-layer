@@ -5,7 +5,7 @@ description: Maintain your own persistent, git-backed memory across Cursor chats
 
 # Cursor Memory
 
-You have persistent memory at `~/.cursor/memory` (a git repo). New chats receive the committed `system/` files, this project's `projects/<slug>/system/` files, and an index of `reference/` files through the `sessionStart` hook. You keep this memory accurate yourself.
+You have persistent memory at `~/.cursor/memory` (a git repo). New chats receive `persona.md`, `human/`, `MEMORY.md`, this project's top-level files, and an index of deferred files through the `sessionStart` hook. You keep this memory accurate yourself.
 
 Every chat also starts with a short contract adapted from Letta's system prompt (precedence, identity, learning from feedback, jogging memory, continuity); `cursor-memory show` prints it, and this skill is the reference for the commands it names.
 
@@ -13,10 +13,10 @@ Every chat also starts with a short contract adapted from Letta's system prompt 
 
 Write when you learn something that should still be true next week:
 
-- A preference or correction about how to talk, code, or run work (`system/human/prefs/communication.md`, `coding.md`, or `workflow.md`).
-- A stable fact the human tells you about themselves (`system/human/identity.md`).
-- A confirmed project fact, convention, or gotcha (`projects/<slug>/system/overview.md`, or a new file beside it).
-- Longer detail that only matters sometimes (`reference/...` or `projects/<slug>/reference/...`, with a precise `description`).
+- A preference or correction about how to talk, code, or run work (`human/prefs/communication.md`, `coding.md`, or `workflow.md`).
+- A stable fact the human tells you about themselves (`human/identity.md`).
+- A confirmed project fact, convention, or gotcha (`<slug>/overview.md`, or a new file beside it).
+- Longer detail that only matters sometimes (`reference/...` or `<slug>/reference/...`, with a precise `description`).
 - A repeatable procedure you want to follow again (`skills/<name>/SKILL.md`, optionally with scripts or references beside it).
 
 Do not write:
@@ -34,11 +34,11 @@ Run `cursor-memory slug` to get the current project slug.
 ```bash
 cursor-memory status                       # what is loaded, token estimate, recent commits
 cursor-memory show                         # exact text new chats receive
-cursor-memory read system/human/prefs/communication.md
+cursor-memory read human/prefs/communication.md
 
-cursor-memory append system/human/prefs/communication.md --body "- Replies in Thai; code and identifiers stay in English."
-cursor-memory replace system/human/prefs/communication.md --old "- (nothing recorded yet)" --new "- Wants evidence before claims."
-cursor-memory write projects/<slug>/reference/deploy.md --description "How deploys work for <slug>." <<'EOF'
+cursor-memory append human/prefs/communication.md --body "- Replies in Thai; code and identifiers stay in English."
+cursor-memory replace human/prefs/communication.md --old "- (nothing recorded yet)" --new "- Wants evidence before claims."
+cursor-memory write <slug>/reference/deploy.md --description "How deploys work for <slug>." <<'EOF'
 - Deploys run from CI on tags; never deploy from a laptop.
 EOF
 cursor-memory move reference/old.md reference/new.md
@@ -58,7 +58,7 @@ cursor-memory skills                       # list memory skills
 
 Every write is a path-scoped commit and becomes active in the next chat. A file marked `read_only: true` needs the human's approval and `--force`. New chats list your memory skills; when one matches the task, `cursor-memory read` it and follow it.
 
-`system/persona.md` is who you are: identity defaults that outrank your model defaults, below the latest user message, repository files, and the human's rules. `system/human/prefs/` are the human's standing defaults; you and reflection keep them current. Everything else is evidence. The persona is `read_only`: reflection never edits it, and you change it only with `replace`, after the human agrees, with `--force`.
+`persona.md` is who you are: identity defaults that outrank your model defaults, below the latest user message, repository files, and the human's rules. `human/prefs/` are the human's standing defaults; you and reflection keep them current. Everything else is evidence. The persona is `read_only`: reflection never edits it, and you change it only with `replace`, after the human agrees, with `--force`.
 
 The human can run these slash commands: `/memory` (what is loaded), `/memory-init` (onboard this repo), `/memory-doctor [symptom]`, `/memory-groom [file]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, and `/memory-palace`.
 
@@ -67,11 +67,11 @@ The human can run these slash commands: `/memory` (what is loaded), `/memory-ini
 Like Letta's `/init`: when a project has no memory yet (new chats then show a "Project memory" notice), capture what every future chat in it should know. Do it when the human runs `/memory-init` or agrees to your suggestion, not on your own.
 
 - Read, do not edit: README, `AGENTS.md` and rules files, package manifests and lockfiles, scripts, lint/format/test config, CI workflows, top-level layout and entry points, `.env.example` (names only, never values).
-- `projects/<slug>/system/overview.md`: what the project is, its stack and versions, the top-level layout, and entry points.
-- `projects/<slug>/system/conventions.md`: the package manager and the dev, test, lint, typecheck, and build commands exactly as the repo defines them; conventions and gotchas the repo documents.
+- `<slug>/overview.md`: what the project is, its stack and versions, the top-level layout, and entry points.
+- `<slug>/conventions.md`: the package manager and the dev, test, lint, typecheck, and build commands exactly as the repo defines them; conventions and gotchas the repo documents.
 - Record only what files show. If something is unclear, leave it out or ask; never guess a command. Do not record what is missing ("no CI yet"); absences go stale.
 - `AGENTS.md` and rules already load in every chat, so point to them ("Repo rules: `AGENTS.md`") instead of copying them.
-- Keep the two files together under about 1,500 characters. Put longer detail in `projects/<slug>/reference/<topic>.md` with a description that says when to read it.
+- Keep the two files together under about 1,500 characters. Put longer detail in `<slug>/reference/<topic>.md` with a description that says when to read it.
 - Show the drafts with the source file of each point, and write them only after the human agrees. Writing `overview.md` replaces the `cursor-memory init` seed.
 
 ## Writing a memory skill
@@ -92,7 +92,7 @@ Like Letta's sleeptime reflection, a separate model pass reviews the chat in the
 - `cursor-memory dreams` lists recent runs; `cursor-memory revert <sha>` undoes one.
 - Settings live in `~/.cursor/cursor-memory.json` under `reflection` (`enabled`, `triggers`, `stepCount`, `minUserMessages`, `model` (`inherit` or a slug), `fallbackModel`). `CURSOR_MEMORY_REFLECTION=0` turns it off.
 
-With reflection disabled, `sessionEnd` falls back to saving the human's statements of lasting intent, verbatim, to `archives/projects/<slug>/learnings/`. Promote confirmed ones into `system/`.
+With reflection disabled, `sessionEnd` falls back to saving the human's statements of lasting intent, verbatim, to `archives/projects/<slug>/learnings/`. Promote confirmed ones into `human/` or the project directory.
 
 ## Auditing memory
 
@@ -123,4 +123,4 @@ Grooming lowers the tokens every chat pays for without losing a rule that matter
 
 ## Tell the human
 
-After you change memory, say what you changed in one line, for example: "Saved to memory: you want replies in Thai (`system/human/prefs/communication.md`)."
+After you change memory, say what you changed in one line, for example: "Saved to memory: you want replies in Thai (`human/prefs/communication.md`)."

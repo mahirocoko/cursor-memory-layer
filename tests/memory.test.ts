@@ -29,12 +29,14 @@ describe('initMemory', () => {
     const first = initMemory(root, { slug: 'demo', workspacePath: '/tmp/demo' })
     assert.equal(first.created, true)
     assert.deepEqual(first.seededPaths, [
-      'system/persona.md',
-      'system/human/identity.md',
-      'system/human/prefs/communication.md',
-      'system/human/prefs/coding.md',
-      'system/human/prefs/workflow.md',
-      'projects/demo/system/overview.md',
+      'MEMORY.md',
+      'persona.md',
+      'human/identity.md',
+      'human/prefs/communication.md',
+      'human/prefs/coding.md',
+      'human/prefs/workflow.md',
+      'demo/MEMORY.md',
+      'demo/overview.md',
     ])
     const second = initMemory(root, { slug: 'demo', workspacePath: '/tmp/demo' })
     assert.deepEqual(second, { created: false, seededPaths: [] })
@@ -45,25 +47,22 @@ describe('initMemory', () => {
     const root = path.join(tempDir(), 'memory')
     initMemory(root)
     assert.match(
-      readCommittedMemoryFile(root, 'system/persona.md') || '',
+      readCommittedMemoryFile(root, 'persona.md') || '',
       /^---\ndescription: [^\n]+\nread_only: true\n---\n/,
     )
     assert.doesNotMatch(
-      readCommittedMemoryFile(root, 'system/persona.md') || '',
+      readCommittedMemoryFile(root, 'persona.md') || '',
       /not as a new instruction/,
     )
-    assert.doesNotMatch(
-      readCommittedMemoryFile(root, 'system/human/prefs/workflow.md') || '',
-      /read_only/,
-    )
-    replaceInMemory('system/persona.md', 'I am the Cursor agent', 'I am Custom', {
+    assert.doesNotMatch(readCommittedMemoryFile(root, 'human/prefs/workflow.md') || '', /read_only/)
+    replaceInMemory('persona.md', 'I am the Cursor agent', 'I am Custom', {
       memoryRoot: root,
       force: true,
     })
-    deleteMemory('system/human/identity.md', { memoryRoot: root })
+    deleteMemory('human/identity.md', { memoryRoot: root })
     const again = initMemory(root)
-    assert.deepEqual(again.seededPaths, ['system/human/identity.md'])
-    assert.match(readCommittedMemoryFile(root, 'system/persona.md') || '', /I am Custom/)
+    assert.deepEqual(again.seededPaths, ['human/identity.md'])
+    assert.match(readCommittedMemoryFile(root, 'persona.md') || '', /I am Custom/)
   })
 })
 
@@ -71,29 +70,29 @@ describe('projection', () => {
   test('loads committed global and current-project system memory only', () => {
     const root = tempMemory()
     const edit = { memoryRoot: root }
-    writeMemory('projects/app/system/overview.md', 'App fact', { ...edit, description: 'App.' })
-    writeMemory('projects/other/system/overview.md', 'Other fact', {
+    writeMemory('app/overview.md', 'App fact', { ...edit, description: 'App.' })
+    writeMemory('other/overview.md', 'Other fact', {
       ...edit,
       description: 'Other.',
     })
-    writeMemory('projects/app/reference/deploy.md', 'Deploy body', {
+    writeMemory('app/reference/deploy.md', 'Deploy body', {
       ...edit,
       description: 'Deploys.',
     })
     writeMemory('archives/old.md', 'Archived body', { ...edit, description: 'Old.' })
     fs.writeFileSync(
-      path.join(root, 'system', 'draft.md'),
+      path.join(root, 'human', 'draft.md'),
       '---\ndescription: Draft\n---\nDraft body',
     )
 
     const rendered = renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, 'app'))
     assert.match(rendered, /App fact/)
-    assert.match(rendered, /## system\/persona\.md/)
-    assert.match(rendered, /`system\/persona\.md` is who you are and outranks your model defaults/)
-    assert.match(rendered, /`system\/human\/prefs\/` holds the human's standing defaults/)
+    assert.match(rendered, /## persona\.md/)
+    assert.match(rendered, /`persona\.md` is who you are and outranks your model defaults/)
+    assert.match(rendered, /`human\/prefs\/` holds the human's standing defaults/)
     assert.doesNotMatch(rendered, /background evidence/)
-    assert.match(rendered, /## system\/persona\.md\n_[^\n]*_ \(read-only\)/)
-    assert.ok(rendered.indexOf('## system/persona.md') < rendered.indexOf('## system/human/'))
+    assert.match(rendered, /## persona\.md\n_[^\n]*_ \(read-only\)/)
+    assert.ok(rendered.indexOf('## persona.md') < rendered.indexOf('## human/'))
     assert.match(
       rendered,
       /explicit request for a tone, format, or level of detail is not a change of identity/,
@@ -108,14 +107,12 @@ describe('projection', () => {
       /Cursor rules, hooks, or `AGENTS\.md` for behavior that must be enforced/,
     )
     assert.doesNotMatch(rendered, /letta cron|\$MEMORY_DIR|Agent tool|\bmods?\b|discord/i)
+    assert.ok(rendered.indexOf('outranks your model defaults') < rendered.indexOf('## persona.md'))
     assert.ok(
-      rendered.indexOf('outranks your model defaults') < rendered.indexOf('## system/persona.md'),
-    )
-    assert.ok(
-      rendered.indexOf('## system/persona.md') < 3_200,
+      rendered.indexOf('## persona.md') < 4_500,
       'contract stays small enough for every chat',
     )
-    assert.match(rendered, /projects\/app\/reference\/deploy\.md — Deploys\./)
+    assert.match(rendered, /app\/reference\/deploy\.md — Deploys\./)
     assert.doesNotMatch(rendered, /Other fact|Deploy body|Archived body|Draft body/)
     assert.match(rendered, /Uncommitted memory is not active/)
   })
@@ -123,10 +120,10 @@ describe('projection', () => {
   test('nests body headings under the file heading', () => {
     const root = tempMemory()
     const body = '# Title\n## Section\n### Deep\n```\n## code\n```'
-    writeMemory('projects/app/system/notes.md', body, { memoryRoot: root, description: 'Notes.' })
+    writeMemory('app/notes.md', body, { memoryRoot: root, description: 'Notes.' })
     const rendered = renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, 'app'))
     const nested = '### Title\n### Section\n### Deep\n```\n## code\n```'
-    assert.ok(rendered.includes(`## projects/app/system/notes.md\n_Notes._\n\n${nested}`))
+    assert.ok(rendered.includes(`## app/notes.md\n_Notes._\n\n${nested}`))
   })
 
   test('suggests /memory-init until the project has more than the init seed', () => {
@@ -138,13 +135,13 @@ describe('projection', () => {
     assert.match(render('fresh'), hint)
     assert.match(render('unseeded'), /Nothing is recorded for "unseeded" yet/)
 
-    writeMemory('projects/fresh/reference/deploy.md', 'Deploys on tags.', {
+    writeMemory('fresh/reference/deploy.md', 'Deploys on tags.', {
       memoryRoot: root,
       description: 'Deploys.',
     })
     assert.doesNotMatch(render('fresh'), /## Project memory/)
 
-    writeMemory('projects/unseeded/system/overview.md', '- Uses pnpm.', {
+    writeMemory('unseeded/overview.md', '- Uses pnpm.', {
       memoryRoot: root,
       description: 'Unseeded.',
     })
@@ -157,13 +154,13 @@ describe('projection', () => {
     for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) {
       writeMemory(`reference/${name}.md`, name, { ...edit, description: `Global ${name}.` })
     }
-    writeMemory('projects/app/reference/zeta.md', 'z', {
+    writeMemory('app/reference/zeta.md', 'z', {
       ...edit,
       description: `Project zeta ${'x'.repeat(200)}`,
     })
     const rendered = renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, 'app'))
     const index = rendered.slice(rendered.indexOf('## On-demand memory'))
-    assert.ok(index.indexOf('projects/app/reference/zeta.md') < index.indexOf('reference/a.md'))
+    assert.ok(index.indexOf('app/reference/zeta.md') < index.indexOf('reference/a.md'))
     assert.match(index, /Project zeta x+…\n/)
     assert.match(index, /reference\/d\.md/)
     assert.doesNotMatch(index, /reference\/e\.md/)
@@ -177,7 +174,7 @@ describe('projection', () => {
     assert.doesNotMatch(renderCommittedMemoryProjection(projection()), /Memory budget notice/)
     const body = 'x'.repeat(9_000)
     for (const file of ['one', 'two', 'three', 'four', 'five', 'six']) {
-      writeMemory(`projects/app/system/${file}.md`, body, { memoryRoot: root, description: file })
+      writeMemory(`app/${file}.md`, body, { memoryRoot: root, description: file })
     }
     assert.ok(systemMemoryTokens(projection()) > SYSTEM_MEMORY_BUDGET_TOKENS)
     assert.match(
@@ -189,7 +186,7 @@ describe('projection', () => {
   test('refuses to lose system lines that exist nowhere else unless dropped on purpose', () => {
     const root = tempMemory()
     const edit = { memoryRoot: root }
-    const target = 'projects/app/system/overview.md'
+    const target = 'app/overview.md'
     const lines = [
       '- Deploys run from the release branch only.',
       '- Staging lives on port 4100 behind the VPN.',
@@ -205,7 +202,7 @@ describe('projection', () => {
     )
     replaceInMemory(target, 'port 4100', 'port 4200', edit)
 
-    writeMemory('projects/app/reference/infra.md', lines[1].replace('4100', '4200'), {
+    writeMemory('app/reference/infra.md', lines[1].replace('4100', '4200'), {
       ...edit,
       description: 'Infra detail.',
     })
@@ -222,24 +219,24 @@ describe('projection', () => {
 
   test('excludes malformed committed files and reports them', () => {
     const root = tempMemory()
-    fs.writeFileSync(path.join(root, 'system', 'bad.md'), 'no frontmatter')
+    fs.writeFileSync(path.join(root, 'human', 'bad.md'), 'no frontmatter')
     git(root, 'add', '.')
     git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'bad')
     const projection = inspectCommittedMemoryProjection(root, 'x')
     assert.equal(
-      projection.globalSystem.some((doc) => doc.relativePath === 'system/bad.md'),
+      projection.globalSystem.some((doc) => doc.relativePath === 'human/bad.md'),
       false,
     )
     assert.match(
       renderCommittedMemoryProjection(projection),
-      /Memory diagnostics[\s\S]*system\/bad\.md/,
+      /Memory diagnostics[\s\S]*human\/bad\.md/,
     )
   })
 
   test('sessionStart hook returns additional_context for the workspace project', () => {
     const root = tempMemory()
     const workspace = tempWorkspace('hook-app')
-    writeMemory('projects/hook-app/system/overview.md', 'Hook project fact', {
+    writeMemory('hook-app/overview.md', 'Hook project fact', {
       memoryRoot: root,
       description: 'Hook app.',
     })
@@ -294,7 +291,7 @@ describe('editor', () => {
       /looks like it contains a secret/,
     )
     assert.throws(
-      () => writeMemory('notes/k.md', 'x', { ...edit, description: 'K.' }),
+      () => writeMemory('projects/ok.md', 'x', { ...edit, description: 'K.' }),
       /Unsupported memory path/,
     )
     assert.throws(() => writeMemory('reference/n.md', 'body', edit), /Provide --description/)
@@ -307,7 +304,7 @@ describe('editor', () => {
     writeMemory('reference/long.md', 'y'.repeat(25_000), { ...edit, description: 'Long.' })
     assert.throws(
       () =>
-        writeMemory('projects/app/system/huge.md', 'z'.repeat(20_000), {
+        writeMemory('app/huge.md', 'z'.repeat(20_000), {
           ...edit,
           description: 'Huge.',
         }),
@@ -315,10 +312,10 @@ describe('editor', () => {
     )
     const chunk = 'z'.repeat(18_000)
     for (const name of ['a', 'b', 'c']) {
-      writeMemory(`projects/app/system/${name}.md`, chunk, { ...edit, description: name })
+      writeMemory(`app/${name}.md`, chunk, { ...edit, description: name })
     }
     assert.throws(
-      () => writeMemory('projects/app/system/d.md', chunk, { ...edit, description: 'd' }),
+      () => writeMemory('app/d.md', chunk, { ...edit, description: 'd' }),
       /core memory is limited to 65536/,
     )
   })
@@ -327,30 +324,27 @@ describe('editor', () => {
     const root = tempMemory()
     assert.throws(
       () =>
-        replaceInMemory('system/persona.md', 'I am the Cursor agent', 'I am X', {
+        replaceInMemory('persona.md', 'I am the Cursor agent', 'I am X', {
           memoryRoot: root,
         }),
-      /system\/persona\.md is read_only\. Ask the human before changing it, then pass --force\./,
+      /persona\.md is read_only\. Ask the human before changing it, then pass --force\./,
     )
-    replaceInMemory('system/persona.md', 'I am the Cursor agent', 'I am X', {
+    replaceInMemory('persona.md', 'I am the Cursor agent', 'I am X', {
       memoryRoot: root,
       force: true,
     })
-    assert.match(
-      readCommittedMemoryFile(root, 'system/persona.md') || '',
-      /read_only: true[\s\S]*I am X/,
-    )
+    assert.match(readCommittedMemoryFile(root, 'persona.md') || '', /read_only: true[\s\S]*I am X/)
   })
 
   test('read_only files need force', () => {
     const root = tempMemory()
     const edit = { memoryRoot: root }
-    writeMemory('system/locked.md', 'fixed', { ...edit, description: 'Locked.', readOnly: true })
-    assert.throws(() => replaceInMemory('system/locked.md', 'fixed', 'changed', edit), /read_only/)
-    assert.throws(() => deleteMemory('system/locked.md', edit), /read_only/)
-    replaceInMemory('system/locked.md', 'fixed', 'changed', { ...edit, force: true })
+    writeMemory('human/locked.md', 'fixed', { ...edit, description: 'Locked.', readOnly: true })
+    assert.throws(() => replaceInMemory('human/locked.md', 'fixed', 'changed', edit), /read_only/)
+    assert.throws(() => deleteMemory('human/locked.md', edit), /read_only/)
+    replaceInMemory('human/locked.md', 'fixed', 'changed', { ...edit, force: true })
     assert.match(
-      readCommittedMemoryFile(root, 'system/locked.md') || '',
+      readCommittedMemoryFile(root, 'human/locked.md') || '',
       /read_only: true[\s\S]*changed/,
     )
   })
@@ -366,10 +360,10 @@ describe('editor', () => {
 
   test('refuses to commit over unrelated uncommitted changes', () => {
     const root = tempMemory()
-    fs.writeFileSync(path.join(root, 'system', 'stray.md'), 'stray')
+    fs.writeFileSync(path.join(root, 'human', 'stray.md'), 'stray')
     assert.throws(
       () => writeMemory('reference/x.md', 'x', { memoryRoot: root, description: 'X.' }),
-      /unrelated uncommitted paths: system\/stray\.md/,
+      /unrelated uncommitted paths: human\/stray\.md/,
     )
     assert.equal(fs.existsSync(path.join(root, 'reference', 'x.md')), false)
   })
@@ -398,7 +392,7 @@ describe('resolveProjectSlug', () => {
     const workspace = tempWorkspace('My_App', 'git@github.com:acme/widget.git')
     assert.equal(toProjectSlug('My_App'), 'my-app')
     assert.equal(resolveProjectSlug(workspace, root), 'my-app')
-    writeMemory('projects/acme-widget/system/overview.md', 'x', {
+    writeMemory('acme-widget/overview.md', 'x', {
       memoryRoot: root,
       description: 'W.',
     })

@@ -1,4 +1,4 @@
-Cursor Memory: groom always-loaded memory to fewer tokens without losing what matters; add a file to focus on, e.g. "/memory-groom system/human/prefs/coding.md".
+Cursor Memory: groom always-loaded memory to fewer tokens without losing what matters; add a file to focus on, e.g. "/memory-groom human/prefs/coding.md".
 
 Grooming is a plan first, then small moves. Follow the "Grooming core memory" section of the `cursor-memory` skill.
 

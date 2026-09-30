@@ -38,7 +38,7 @@ const remoteCanonicalSlug = (workspacePath: string): string | null => {
 }
 
 export const projectScopeExists = (memoryRoot: string, slug: string): boolean =>
-  listCommittedMemoryFiles(memoryRoot, `projects/${slug}`).some((file) => file.endsWith('.md'))
+  listCommittedMemoryFiles(memoryRoot, slug).some((file) => file.endsWith('.md'))
 
 export function resolveProjectSlug(workspacePath: string, memoryRoot: string): string {
   const gitRoot = resolveGitRoot(workspacePath)
