@@ -263,6 +263,29 @@ describe('runDream', () => {
     assert.equal(byPath['skills/old/SKILL.md'], null)
   })
 
+  test('rejects a system file over the character cap and keeps the rest of the batch', () => {
+    const memoryRoot = tempMemory()
+    const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
+    const plan = planDreamOperations({
+      memoryRoot,
+      baseRevision,
+      operations: [
+        {
+          op: 'write',
+          path: 'projects/app/system/huge.md',
+          description: 'Huge.',
+          body: 'x'.repeat(20_000),
+        },
+        { op: 'append', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
+      ],
+    })
+    assert.match(plan.rejected[0] ?? '', /system files are limited to 20000/)
+    assert.deepEqual(
+      plan.pending.map((change) => change.relativePath),
+      ['system/human/prefs/workflow.md'],
+    )
+  })
+
   test('rejects persona edits and still applies the rest of the batch', () => {
     const memoryRoot = tempMemory()
     const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha

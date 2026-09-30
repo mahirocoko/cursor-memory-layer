@@ -175,13 +175,9 @@ describe('projection', () => {
     const projection = () => inspectCommittedMemoryProjection(root, 'app')
     assert.ok(systemMemoryTokens(projection()) < SYSTEM_MEMORY_BUDGET_TOKENS)
     assert.doesNotMatch(renderCommittedMemoryProjection(projection()), /Memory budget notice/)
-    const line = (n: number) => `- Fact ${n}: ${'detail '.repeat(40)}`
+    const body = 'x'.repeat(9_000)
     for (const file of ['one', 'two', 'three', 'four', 'five', 'six']) {
-      writeMemory(
-        `projects/app/system/${file}.md`,
-        Array.from({ length: 80 }, (_, n) => line(n)).join('\n'),
-        { memoryRoot: root, description: file },
-      )
+      writeMemory(`projects/app/system/${file}.md`, body, { memoryRoot: root, description: file })
     }
     assert.ok(systemMemoryTokens(projection()) > SYSTEM_MEMORY_BUDGET_TOKENS)
     assert.match(
@@ -303,6 +299,28 @@ describe('editor', () => {
     )
     assert.throws(() => writeMemory('reference/n.md', 'body', edit), /Provide --description/)
     assert.equal(git(root, 'status', '--porcelain'), '')
+  })
+
+  test('rejects system files past Letta size caps and still allows a large reference file', () => {
+    const root = tempMemory()
+    const edit = { memoryRoot: root }
+    writeMemory('reference/long.md', 'y'.repeat(25_000), { ...edit, description: 'Long.' })
+    assert.throws(
+      () =>
+        writeMemory('projects/app/system/huge.md', 'z'.repeat(20_000), {
+          ...edit,
+          description: 'Huge.',
+        }),
+      /system files are limited to 20000/,
+    )
+    const chunk = 'z'.repeat(18_000)
+    for (const name of ['a', 'b', 'c']) {
+      writeMemory(`projects/app/system/${name}.md`, chunk, { ...edit, description: name })
+    }
+    assert.throws(
+      () => writeMemory('projects/app/system/d.md', chunk, { ...edit, description: 'd' }),
+      /core memory is limited to 65536/,
+    )
   })
 
   test('the seeded persona needs --force and stays read_only after a forced replace', () => {

@@ -14,6 +14,7 @@ import { isOwnedStatusLine, readCliConfig } from '../install/statusline-config.t
 import {
   estimateTokens,
   SYSTEM_DOCUMENT_WARN_CHARS,
+  SYSTEM_FILE_MAX_CHARS,
   SYSTEM_MEMORY_BUDGET_TOKENS,
 } from './config.ts'
 import { parseMemoryDocument } from './document.ts'
@@ -108,7 +109,7 @@ function checkSize(
       findings.push({
         level: 'warn',
         check: 'core size',
-        detail: `${file.relativePath} is ${file.content.length} chars, above Letta's ${SYSTEM_DOCUMENT_WARN_CHARS}-char per-file default; groom it with /memory-groom.`,
+        detail: `${file.relativePath} is ${file.content.length} chars, above ${SYSTEM_DOCUMENT_WARN_CHARS}; system files are rejected at ${SYSTEM_FILE_MAX_CHARS}. Groom it with /memory-groom.`,
       })
     }
   }

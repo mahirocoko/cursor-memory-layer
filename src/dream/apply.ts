@@ -1,5 +1,10 @@
 import { DREAM_SYSTEM_GROWTH_MAX_CHARS } from '../memory/config.ts'
-import { buildDocumentContent, currentDocument, validateMemoryContent } from '../memory/editor.ts'
+import {
+  assertSystemCoreSize,
+  buildDocumentContent,
+  currentDocument,
+  validateMemoryContent,
+} from '../memory/editor.ts'
 import {
   assertNoUnrelatedChanges,
   commitMemoryPaths,
@@ -183,6 +188,16 @@ export function planDreamOperations(options: {
                 relativePath,
               }),
             )
+      if (tier === 'system') {
+        const overlays = new Map<string, string | null>()
+        for (const pendingDraft of drafts.values()) {
+          if (pendingDraft.tier === 'system') {
+            overlays.set(pendingDraft.relativePath, pendingDraft.content)
+          }
+        }
+        overlays.set(relativePath, content)
+        assertSystemCoreSize(memoryRoot, overlays)
+      }
       const next = new Map(drafts).set(relativePath, { ...draft, body, content })
       const growth = systemGrowth(next.values())
       if (tier === 'system' && growth > DREAM_SYSTEM_GROWTH_MAX_CHARS) {

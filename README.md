@@ -20,7 +20,7 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 ### Memory layout
 
 ```
-system/                     loaded into every chat (Letta-style core; doctor warns past ~32,000 tokens)
+system/                     loaded into every chat (Letta-style core; doctor warns past ~12,000 tokens, writes stop at 20,000 per file and 65,536 for the loaded core)
   human/prefs/              communication.md, coding.md, workflow.md
   human/identity.md         facts the human shared about themselves
   persona.md                identity defaults; read_only, outranks model defaults

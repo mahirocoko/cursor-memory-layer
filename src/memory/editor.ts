@@ -1,10 +1,12 @@
 import * as fs from 'node:fs'
+import { SYSTEM_CORE_MAX_CHARS, SYSTEM_FILE_MAX_CHARS } from './config.ts'
 import { hasFrontmatter, parseMemoryDocument, renderMemoryDocument } from './document.ts'
 import {
   assertNoUnrelatedChanges,
   type CommitMemoryPathsResult,
   commitMemoryPaths,
   deleteMemoryFile,
+  listCommittedMemoryFiles,
   readCommittedMemoryFile,
   resolveMemoryPath,
   revertMemoryCommit,
@@ -66,11 +68,64 @@ export function validateMemoryContent(relativePath: string, content: string): st
       `${relativePath} is ${content.length} characters; skill files are limited to ${SKILL_FILE_MAX_CHARS}.`,
     )
   }
+  if (scope.tier === 'system' && content.length > SYSTEM_FILE_MAX_CHARS) {
+    throw new Error(
+      `${relativePath} is ${content.length} characters; system files are limited to ${SYSTEM_FILE_MAX_CHARS}. Put detail in reference/.`,
+    )
+  }
   assertNoSecrets(content, relativePath)
   return content.endsWith('\n') ? content : `${content}\n`
 }
 
 const validateDocument = validateMemoryContent
+
+/** Global `system/` plus each project's `system/` must stay within Letta's core cap. */
+export function assertSystemCoreSize(
+  memoryRoot: string,
+  overlays: Map<string, string | null>,
+): void {
+  const contents = new Map<string, string>()
+  for (const relativePath of listCommittedMemoryFiles(memoryRoot, '')) {
+    try {
+      if (classifyMemoryPath(relativePath).tier !== 'system') continue
+    } catch {
+      continue
+    }
+    const content = readCommittedMemoryFile(memoryRoot, relativePath)
+    if (content !== null) contents.set(relativePath, content)
+  }
+  for (const [relativePath, content] of overlays) {
+    let tier: string
+    try {
+      tier = classifyMemoryPath(relativePath).tier
+    } catch {
+      continue
+    }
+    if (tier !== 'system') continue
+    if (content === null) contents.delete(relativePath)
+    else contents.set(relativePath, content)
+  }
+  let globalChars = 0
+  const byProject = new Map<string, number>()
+  for (const [relativePath, content] of contents) {
+    const scope = classifyMemoryPath(relativePath)
+    if (scope.projectSlug === null) globalChars += content.length
+    else byProject.set(scope.projectSlug, (byProject.get(scope.projectSlug) ?? 0) + content.length)
+  }
+  if (globalChars > SYSTEM_CORE_MAX_CHARS) {
+    throw new Error(
+      `system/ is ${globalChars} characters; core memory is limited to ${SYSTEM_CORE_MAX_CHARS}.`,
+    )
+  }
+  for (const [projectSlug, projectChars] of byProject) {
+    const total = globalChars + projectChars
+    if (total > SYSTEM_CORE_MAX_CHARS) {
+      throw new Error(
+        `system/ plus projects/${projectSlug}/system/ is ${total} characters; core memory is limited to ${SYSTEM_CORE_MAX_CHARS}.`,
+      )
+    }
+  }
+}
 
 const commitOwned = (memoryRoot: string, paths: string[], message: string): EditResult => ({
   ...commitMemoryPaths({ memoryRoot, relativePaths: paths, message }),
@@ -118,6 +173,9 @@ export function writeMemory(
       relativePath,
     }),
   )
+  if (tier === 'system') {
+    assertSystemCoreSize(options.memoryRoot, new Map([[relativePath, content]]))
+  }
   if (tier === 'system' && existing) {
     assertRetained({
       memoryRoot: options.memoryRoot,
