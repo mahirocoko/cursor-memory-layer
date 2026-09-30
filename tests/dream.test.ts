@@ -126,6 +126,8 @@ describe('runDream', () => {
     assert.match(prompts[0].prompt, /Question 2: from now on use pnpm/)
     assert.match(prompts[0].prompt, /### system\/human\/prefs\/workflow\.md/)
     assert.match(prompts[0].prompt, /### reference\/locked\.md \(read_only\)/)
+    assert.match(prompts[0].prompt, /### system\/persona\.md \(read_only\)/)
+    assert.doesNotMatch(prompts[0].prompt, /`system\/persona\.md`: every chat/)
     assert.equal(outcome.rejected?.length, 3)
 
     const commit = getMemoryLog(memoryRoot, 1)[0]
@@ -196,6 +198,24 @@ describe('runDream', () => {
     assert.equal(getMemoryLog(memoryRoot, 1)[0].sha, head)
     assert.equal(readDreamLog(memoryRoot).length, 0)
     assert.equal(reflectedMessageCount(memoryRoot, 'dry'), 0)
+  })
+
+  test('rejects persona edits and still applies the rest of the batch', () => {
+    const memoryRoot = tempMemory()
+    const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
+    const plan = planDreamOperations({
+      memoryRoot,
+      baseRevision,
+      operations: [
+        { op: 'append', path: 'system/persona.md', body: '- Drifted.' },
+        { op: 'append', path: 'system/human/prefs/workflow.md', body: '- Uses pnpm.' },
+      ],
+    })
+    assert.deepEqual(plan.rejected, ['system/persona.md: read_only'])
+    assert.deepEqual(
+      plan.pending.map((change) => change.relativePath),
+      ['system/human/prefs/workflow.md'],
+    )
   })
 
   test('rejects writes that drop most of a file unless the lines move elsewhere', () => {

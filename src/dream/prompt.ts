@@ -112,11 +112,11 @@ Review the new conversation excerpt against the current memory and decide what, 
 - Everything in \`system/\` and \`projects/${slug}/system/\` is loaded into every chat, so each line there costs every future chat. One reflection may grow \`system/\` by at most ${DREAM_SYSTEM_GROWTH_MAX_CHARS} characters in total; put longer additions in \`reference/\` with a precise description.
 - To change an existing file, prefer \`replace\` (an exact \`old\` passage that appears once, and its \`new\` text) or \`append\`. Use \`write\` only for a new file or to rewrite a short one.
 - Never store secrets, credentials, tokens, private URLs, or long transcript quotes.
-- Never touch files marked (read_only). Never write under \`archives/\`.
+- Never touch files marked (read_only), including \`system/persona.md\` (the agent's identity). Never write under \`archives/\`.
 - Write in the language the existing memory uses for that file; English when new.
 
 ## Where things go
-- \`system/human/prefs/communication.md\`, \`system/human/prefs/coding.md\`, \`system/human/prefs/workflow.md\`, \`system/human/identity.md\`, \`system/persona.md\`: every chat, every project.
+- \`system/human/prefs/communication.md\`, \`system/human/prefs/coding.md\`, \`system/human/prefs/workflow.md\`, \`system/human/identity.md\`: every chat, every project. Do not edit \`system/persona.md\`; identity changes happen in chat with the human.
 - \`projects/${slug}/system/<topic>.md\`: every chat in this project.
 - \`reference/<topic>.md\`, \`projects/${slug}/reference/<topic>.md\`: loaded on demand by description.
 - \`skills/<lowercase-name>/SKILL.md\`: a procedure the agent should follow when its description matches.

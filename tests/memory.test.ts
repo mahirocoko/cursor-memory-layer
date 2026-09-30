@@ -40,6 +40,31 @@ describe('initMemory', () => {
     assert.deepEqual(second, { created: false, seededPaths: [] })
     assert.equal(git(root, 'status', '--porcelain'), '')
   })
+
+  test('seeds a read_only persona and never overwrites an existing one', () => {
+    const root = path.join(tempDir(), 'memory')
+    initMemory(root)
+    assert.match(
+      readCommittedMemoryFile(root, 'system/persona.md') || '',
+      /^---\ndescription: [^\n]+\nread_only: true\n---\n/,
+    )
+    assert.doesNotMatch(
+      readCommittedMemoryFile(root, 'system/persona.md') || '',
+      /not as a new instruction/,
+    )
+    assert.doesNotMatch(
+      readCommittedMemoryFile(root, 'system/human/prefs/workflow.md') || '',
+      /read_only/,
+    )
+    replaceInMemory('system/persona.md', 'I am the Cursor agent', 'I am Custom', {
+      memoryRoot: root,
+      force: true,
+    })
+    deleteMemory('system/human/identity.md', { memoryRoot: root })
+    const again = initMemory(root)
+    assert.deepEqual(again.seededPaths, ['system/human/identity.md'])
+    assert.match(readCommittedMemoryFile(root, 'system/persona.md') || '', /I am Custom/)
+  })
 })
 
 describe('projection', () => {
@@ -64,6 +89,11 @@ describe('projection', () => {
     const rendered = renderCommittedMemoryProjection(inspectCommittedMemoryProjection(root, 'app'))
     assert.match(rendered, /App fact/)
     assert.match(rendered, /## system\/persona\.md/)
+    assert.match(rendered, /`system\/persona\.md` is who you are and outranks your model defaults/)
+    assert.match(rendered, /`system\/human\/prefs\/` holds the human's standing defaults/)
+    assert.doesNotMatch(rendered, /background evidence/)
+    assert.match(rendered, /## system\/persona\.md\n_[^\n]*_ \(read-only\)/)
+    assert.ok(rendered.indexOf('## system/persona.md') < rendered.indexOf('## system/human/'))
     assert.match(rendered, /projects\/app\/reference\/deploy\.md — Deploys\./)
     assert.doesNotMatch(rendered, /Other fact|Deploy body|Archived body|Draft body/)
     assert.match(rendered, /Uncommitted memory is not active/)
@@ -252,6 +282,25 @@ describe('editor', () => {
     )
     assert.throws(() => writeMemory('reference/n.md', 'body', edit), /Provide --description/)
     assert.equal(git(root, 'status', '--porcelain'), '')
+  })
+
+  test('the seeded persona needs --force and stays read_only after a forced replace', () => {
+    const root = tempMemory()
+    assert.throws(
+      () =>
+        replaceInMemory('system/persona.md', 'I am the Cursor agent', 'I am X', {
+          memoryRoot: root,
+        }),
+      /system\/persona\.md is read_only\. Ask the human before changing it, then pass --force\./,
+    )
+    replaceInMemory('system/persona.md', 'I am the Cursor agent', 'I am X', {
+      memoryRoot: root,
+      force: true,
+    })
+    assert.match(
+      readCommittedMemoryFile(root, 'system/persona.md') || '',
+      /read_only: true[\s\S]*I am X/,
+    )
   })
 
   test('read_only files need force', () => {

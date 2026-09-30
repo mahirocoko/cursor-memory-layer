@@ -23,7 +23,7 @@ Built and tested against the Cursor CLI (`cursor-agent`). The same hooks load in
 system/                     loaded into every chat (Letta-style core; doctor warns past ~32,000 tokens)
   human/prefs/              communication.md, coding.md, workflow.md
   human/identity.md         facts the human shared about themselves
-  persona.md
+  persona.md                identity defaults; read_only, outranks model defaults
 projects/<slug>/system/     loaded into every chat in that project
 projects/<slug>/reference/  loaded on demand, by description
 reference/                  loaded on demand, by description

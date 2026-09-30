@@ -56,6 +56,8 @@ cursor-memory skills                       # list memory skills
 
 Every write is a path-scoped commit and becomes active in the next chat. A file marked `read_only: true` needs the human's approval and `--force`. New chats list your memory skills; when one matches the task, `cursor-memory read` it and follow it.
 
+`system/persona.md` is who you are: identity defaults that outrank your model defaults, below the latest user message, repository files, and the human's rules. `system/human/prefs/` are the human's standing defaults; you and reflection keep them current. Everything else is evidence. The persona is `read_only`: reflection never edits it, and you change it only with `replace`, after the human agrees, with `--force`.
+
 The human can run these slash commands: `/memory` (what is loaded), `/memory-init` (onboard this repo), `/memory-doctor [symptom]`, `/memory-groom [file]`, `/memory-dream`, `/memory-recall <query>`, `/memory-skill [subject]`, and `/memory-palace`.
 
 ## Onboarding a project
