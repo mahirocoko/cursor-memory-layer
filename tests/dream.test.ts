@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import * as path from 'node:path'
 import { beforeEach, describe, test } from 'node:test'
 import { planDreamOperations } from '../src/dream/apply.ts'
-import { parseDreamResponse } from '../src/dream/prompt.ts'
+import { buildDreamPrompt, parseDreamResponse } from '../src/dream/prompt.ts'
 import { type AgentRunInput, resolveDreamModel, runDream } from '../src/dream/runner.ts'
 import {
   isBackedOff,
@@ -66,6 +66,42 @@ describe('dream response contract', () => {
         ),
       /limit is 8/,
     )
+  })
+
+  test('prompt follows the injected learning contract and keeps the JSON contract', () => {
+    const prompt = buildDreamPrompt({
+      snapshot: '(memory is empty)',
+      transcript: '[1] user: I already told you, never push without asking.',
+      projectSlug: 'app',
+      conversationId: 'c',
+      revision: 'abcdef1234567890',
+    })
+    assert.match(prompt, /Corrections and frustration[\s\S]*signal that memory should change/)
+    assert.match(
+      prompt,
+      /general rule that makes future chats act better, not a record of the event/,
+    )
+    assert.match(prompt, /why the assistant forgot or ignored something, find the cause/)
+    assert.match(
+      prompt,
+      /already in `system\/`, make it clearer or more specific instead of adding a second copy/,
+    )
+    assert.match(prompt, /Never record a claim, plan, or guess that only the assistant made/)
+    assert.doesNotMatch(prompt, /Record only what the human said or confirmed/)
+    assert.match(
+      prompt,
+      /A request that shapes one reply \(tone, format, length\) is not a standing preference/,
+    )
+    assert.match(prompt, /Never touch files marked \(read_only\), including `system\/persona\.md`/)
+    assert.match(prompt, /`system\/human\/prefs\/`, which reflection may edit/)
+    assert.match(prompt, /grow `system\/` by at most 2000 characters/)
+    assert.match(prompt, /Touch at most one skill per reflection/)
+    assert.match(prompt, /At most 8 operations\./)
+    for (const op of ['replace', 'append', 'write', 'delete']) {
+      assert.match(prompt, new RegExp(`"op": "${op}"`))
+    }
+    assert.doesNotMatch(prompt, /"op": "(?:update|extend|deprecate|split|create|none)"/)
+    assert.doesNotMatch(prompt, /\$MEMORY_DIR|ARCHIVE\.md|MEMORY\.md|deprecated: true|git commit/)
   })
 })
 
@@ -198,6 +234,33 @@ describe('runDream', () => {
     assert.equal(getMemoryLog(memoryRoot, 1)[0].sha, head)
     assert.equal(readDreamLog(memoryRoot).length, 0)
     assert.equal(reflectedMessageCount(memoryRoot, 'dry'), 0)
+  })
+
+  test('skill extend and deprecate map to append and delete', () => {
+    const memoryRoot = tempMemory()
+    writeMemory('skills/deploy/SKILL.md', '1. Build.\n2. Ship.', {
+      memoryRoot,
+      description: 'Deploy.',
+    })
+    writeMemory('skills/old/SKILL.md', '1. Old step.', { memoryRoot, description: 'Old.' })
+    const baseRevision = getMemoryLog(memoryRoot, 1)[0].sha
+    const plan = planDreamOperations({
+      memoryRoot,
+      baseRevision,
+      operations: [
+        { op: 'append', path: 'skills/deploy/SKILL.md', body: '## Rollback\n1. Revert the tag.' },
+        { op: 'delete', path: 'skills/old/SKILL.md' },
+      ],
+    })
+    assert.deepEqual(plan.rejected, [])
+    const byPath = Object.fromEntries(
+      plan.pending.map((change) => [change.relativePath, change.content]),
+    )
+    assert.match(
+      byPath['skills/deploy/SKILL.md'] ?? '',
+      /2\. Ship\.\n## Rollback\n1\. Revert the tag\./,
+    )
+    assert.equal(byPath['skills/old/SKILL.md'], null)
   })
 
   test('rejects persona edits and still applies the rest of the batch', () => {

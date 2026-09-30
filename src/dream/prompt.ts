@@ -1,9 +1,9 @@
 /**
  * Reflection ("dream") prompt and response contract. The instructions follow
- * Letta Code's reflection subagent (`src/agent/subagents/builtin/reflection.md`):
- * extract durable knowledge, fix contradictions at the source, deduplicate, and
- * skip one-off task state. Unlike Letta, the child here has no tools; it returns
- * JSON operations that the harness validates and commits.
+ * Letta Code's reflection subagent (`src/agent/subagents/builtin/reflection-v2.md`):
+ * corrections first, general rules over events, fix contradictions at the
+ * source, deduplicate, and skip one-off task state. Unlike Letta, the child has
+ * no tools; it returns JSON operations that the harness validates and commits.
  */
 
 import { DREAM_SYSTEM_GROWTH_MAX_CHARS } from '../memory/config.ts'
@@ -97,22 +97,28 @@ export function buildDreamPrompt(options: {
 Review the new conversation excerpt against the current memory and decide what, if anything, should change so future chats go better.
 
 ## What to capture
-- Stable preferences and corrections the human gave about how to communicate or work.
-- Facts the human stated about themselves.
-- Confirmed project conventions, decisions, gotchas, and commands for project "${slug}".
-- A repeatable multi-step procedure worth reusing, as a skill.
+In priority order:
+1. Corrections and frustration: the human correcting the assistant, asking "why did you do that?", saying "I already told you" or "never do that again", or rejecting the same step twice. Each is a signal that memory should change. Write the general rule that makes future chats act better, not a record of the event, and state it no broader than the correction supports.
+2. Stable preferences the human gave about how to communicate or work, and facts the human stated about themselves.
+3. Confirmed project conventions, decisions, gotchas, and commands for project "${slug}".
+4. Anything in the excerpt that contradicts current memory.
+5. A repeatable multi-step procedure worth reusing, as a skill.
+
+When the human asks why the assistant forgot or ignored something, find the cause in the memory below before writing. If the rule is missing, add it. If a stale line says otherwise, fix that line. If the rule is already in \`system/\`, make it clearer or more specific instead of adding a second copy. If it sits in \`reference/\` behind a vague description, sharpen the description or move the rule into \`system/\` within the growth limit. The memory below is the current committed state and may be newer than what that chat loaded.
 
 ## Rules
 - Most conversations need no change. Zero operations is a normal, good answer.
-- Record only what the human said or confirmed, or what the repository evidently established. Never record the assistant's guesses.
+- Evidence comes from the human (what they said, confirmed, corrected, or objected to) and from what the repository or a command in the excerpt evidently established. The assistant's messages show what it did, which is what a correction is about; on their own they are not evidence. Never record a claim, plan, or guess that only the assistant made.
+- A request that shapes one reply (tone, format, length) is not a standing preference. Record it only when the human made it standing ("from now on", "always", "stop doing") or repeated it.
 - Skip one-off task state: progress, current bugs, temporary plans, file lists for today's task.
 - Record commands, ports, versions, and paths exactly as the human stated them or as the conversation showed them working. Never derive one the conversation did not show.
 - Resolve contradictions at the source: rewrite the stale line instead of appending a conflicting one. If the new facts make part of a line wrong and the correct value is unknown, remove that part rather than keep or guess it. Deduplicate.
 - Prefer updating an existing file on the same subject over creating a new one; create a file only for a clearly separate topic.
 - Everything in \`system/\` and \`projects/${slug}/system/\` is loaded into every chat, so each line there costs every future chat. One reflection may grow \`system/\` by at most ${DREAM_SYSTEM_GROWTH_MAX_CHARS} characters in total; put longer additions in \`reference/\` with a precise description.
 - To change an existing file, prefer \`replace\` (an exact \`old\` passage that appears once, and its \`new\` text) or \`append\`. Use \`write\` only for a new file or to rewrite a short one.
+- Touch at most one skill per reflection, and prefer changing an existing one: fix a wrong or outdated step with \`replace\`; add a new variant or edge case with \`append\` as its own section; \`delete\` a skill that is obsolete or harmful; \`write\` a new skill only for a novel, repeatable procedure with concrete commands that no listed skill covers even partly. When unsure, change no skill.
 - Never store secrets, credentials, tokens, private URLs, or long transcript quotes.
-- Never touch files marked (read_only), including \`system/persona.md\` (the agent's identity). Never write under \`archives/\`.
+- Never touch files marked (read_only), including \`system/persona.md\` (the agent's identity). Persona changes happen in chat with the human's agreement; if the excerpt shows the human asking for one, leave it to the chat. A correction about how the agent should behave goes in \`system/human/prefs/\`, which reflection may edit. Never write under \`archives/\`.
 - Write in the language the existing memory uses for that file; English when new.
 
 ## Where things go
