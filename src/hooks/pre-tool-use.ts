@@ -7,7 +7,7 @@ import { type HookInput, isDirectInvocation, runHook } from './io.ts'
 
 export type GuardDecision =
   | Record<string, never>
-  | { permission: 'ask'; user_message: string; agent_message: string }
+  | { permission: 'deny'; user_message: string; agent_message: string }
 
 const DESTRUCTIVE_GIT = [
   /\bgit\b[^;&|]*\breset\b[^;&|]*--hard\b/,
@@ -69,10 +69,10 @@ export function evaluateShellCommand(
   if (!destructiveGit && !destructiveFs) return {}
 
   return {
-    permission: 'ask',
-    user_message: `This command can rewrite or erase Cursor memory history in ${memoryRoot}. Approve only if you intend that.`,
+    permission: 'deny',
+    user_message: `Blocked a command that can rewrite or erase Cursor memory history in ${memoryRoot}. Run it manually outside the agent only if intended.`,
     agent_message:
-      'Destructive git or rm against the Cursor memory repository needs human approval. For normal edits use `cursor-memory write/replace/delete`, and `cursor-memory revert <sha>` to undo.',
+      'Destructive git or rm against the Cursor memory repository is blocked. Do not retry via another tool or spelling. For normal edits use `cursor-memory write/replace/delete`, and `cursor-memory revert <sha>` to undo.',
   }
 }
 

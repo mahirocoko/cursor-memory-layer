@@ -72,7 +72,7 @@ describe('findSecretLikeContent', () => {
   test('flags common credential shapes', () => {
     for (const secret of [
       'token ghp_abcdefghijklmnopqrstuvwxyz0123456789',
-      'AKIAABCDEFGHIJKLMNOP',
+      'AKIA0000000000000000',
       'key sk-ant-abcdefghijklmnopqrstuvwxyz',
       'password: hunter2hunter2',
       'https://user:pass@example.com/repo.git',

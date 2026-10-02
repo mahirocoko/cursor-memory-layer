@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import { nodeScriptPath, quoteShellArgument } from './shell.ts'
 
 export type HookEntry = {
   command: string
@@ -13,14 +14,29 @@ export type HooksConfig = {
   [key: string]: unknown
 }
 
-const OWNED_COMMAND = /cursor-memory-layer[/\\]src[/\\]hooks[/\\]/
+const OWNED_SCRIPT =
+  /[/\\]cursor-memory-layer[/\\]src[/\\]hooks[/\\](?:session-start|session-end|stop|pre-compact|pre-tool-use)\.ts$/
+const HOOK_MARKER = ' # cursor-memory-layer:hook'
 
-export const isOwnedHook = (entry: HookEntry): boolean =>
-  typeof entry.command === 'string' && OWNED_COMMAND.test(entry.command)
+export const isOwnedHook = (entry: HookEntry, expectedCommands: string[] = []): boolean => {
+  if (typeof entry.command !== 'string') return false
+  const script = nodeScriptPath(entry.command, HOOK_MARKER)
+  if (!script) return false
+  return (
+    OWNED_SCRIPT.test(script) ||
+    expectedCommands.some((command) => nodeScriptPath(command, HOOK_MARKER) === script)
+  )
+}
 
-export function buildOwnedHooks(repoRoot: string, nodePath: string): Record<string, HookEntry> {
+export function buildOwnedHooks(
+  repoRoot: string,
+  nodePath: string,
+  legacy = false,
+): Record<string, HookEntry> {
   const command = (script: string) =>
-    `"${nodePath}" --experimental-strip-types --disable-warning=ExperimentalWarning "${path.join(repoRoot, 'src', 'hooks', script)}"`
+    legacy
+      ? `"${nodePath}" --experimental-strip-types --disable-warning=ExperimentalWarning "${path.join(repoRoot, 'src', 'hooks', script)}"`
+      : `${quoteShellArgument(nodePath)} --experimental-strip-types --disable-warning=ExperimentalWarning ${quoteShellArgument(path.join(repoRoot, 'src', 'hooks', script))}${HOOK_MARKER}`
   return {
     sessionStart: { command: command('session-start.ts'), timeout: 10 },
     sessionEnd: { command: command('session-end.ts'), timeout: 15 },
@@ -30,21 +46,30 @@ export function buildOwnedHooks(repoRoot: string, nodePath: string): Record<stri
   }
 }
 
-export function removeOwnedHooks(config: HooksConfig): HooksConfig {
+export function removeOwnedHooks(
+  config: HooksConfig,
+  expectedCommands: string[] = [],
+): HooksConfig {
   const hooks: Record<string, HookEntry[]> = {}
   for (const [event, entries] of Object.entries(config.hooks || {})) {
-    const kept = (Array.isArray(entries) ? entries : []).filter((entry) => !isOwnedHook(entry))
+    const kept = (Array.isArray(entries) ? entries : []).filter(
+      (entry) => !isOwnedHook(entry, expectedCommands),
+    )
     if (kept.length > 0) hooks[event] = kept
   }
   return { ...config, version: config.version ?? 1, hooks }
 }
 
-const replaceOwnedHook = (entries: HookEntry[], entry: HookEntry): HookEntry[] => {
-  const index = entries.findIndex(isOwnedHook)
+const replaceOwnedHook = (
+  entries: HookEntry[],
+  entry: HookEntry,
+  expectedCommands: string[],
+): HookEntry[] => {
+  const index = entries.findIndex((current) => isOwnedHook(current, expectedCommands))
   if (index === -1) return [...entries, entry]
   return entries.flatMap((current, currentIndex) => {
     if (currentIndex === index) return [entry]
-    return isOwnedHook(current) ? [] : [current]
+    return isOwnedHook(current, expectedCommands) ? [] : [current]
   })
 }
 
@@ -52,9 +77,14 @@ const replaceOwnedHook = (entries: HookEntry[], entry: HookEntry): HookEntry[] =
 export function mergeOwnedHooks(
   config: HooksConfig,
   owned: Record<string, HookEntry>,
+  legacyCommands: string[] = [],
 ): HooksConfig {
   const hooks = { ...(config.hooks || {}) }
+  const expectedCommands = [
+    ...Object.values(owned).map((entry) => entry.command),
+    ...legacyCommands,
+  ]
   for (const [event, entry] of Object.entries(owned))
-    hooks[event] = replaceOwnedHook(hooks[event] || [], entry)
+    hooks[event] = replaceOwnedHook(hooks[event] || [], entry, expectedCommands)
   return { ...config, version: config.version ?? 1, hooks }
 }

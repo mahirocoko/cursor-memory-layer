@@ -2,8 +2,8 @@
  * Reflection ("dream") prompt and response contract. The instructions follow
  * Letta Code's reflection subagent (`src/agent/subagents/builtin/reflection-v2.md`):
  * corrections first, general rules over events, fix contradictions at the
- * source, deduplicate, and skip one-off task state. Unlike Letta, the child has
- * no tools; it returns JSON operations that the harness validates and commits.
+ * source, deduplicate, and skip one-off task state. Unlike Letta, the child is
+ * instructed not to use tools; the harness validates and commits its JSON operations.
  */
 
 import { DREAM_SYSTEM_GROWTH_MAX_CHARS } from '../memory/config.ts'
@@ -111,7 +111,7 @@ export function buildDreamPrompt(options: {
   revision: string
 }): string {
   const slug = options.projectSlug
-  return `You are the background reflection pass ("dream") for Cursor Memory, a Letta-style persistent memory that an AI coding agent carries across chats. You have no tools and cannot ask questions. Do not try to read files or run commands; everything you need is below. Reply only with the JSON described at the end.
+  return `You are the background reflection pass ("dream") for Cursor Memory, a Letta-style persistent memory that an AI coding agent carries across chats. Do not use tools or ask questions. Do not try to read files or run commands; everything you need is below. Reply only with the JSON described at the end.
 
 Review the new conversation excerpt against the current memory and decide what, if anything, should change so future chats go better.
 

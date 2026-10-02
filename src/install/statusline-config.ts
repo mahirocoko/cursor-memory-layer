@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { nodeScriptPath, quoteShellArgument } from './shell.ts'
 
 export type StatusLineConfig = {
   type: 'command'
@@ -12,7 +13,8 @@ export type StatusLineConfig = {
 
 type CliConfig = { statusLine?: unknown; [key: string]: unknown }
 
-const OWNED_STATUSLINE = /cursor-memory-layer[/\\]statusline[/\\]statusline\.mjs/
+const OWNED_STATUSLINE = /[/\\]cursor-memory-layer[/\\]statusline[/\\]statusline\.mjs$/
+const STATUSLINE_MARKER = ' # cursor-memory-layer:statusline'
 
 export const cliConfigPath = (cursorHome: string): string =>
   path.join(cursorHome, 'cli-config.json')
@@ -21,19 +23,34 @@ export const cliConfigPath = (cursorHome: string): string =>
 export const statusLineBackupPath = (cursorHome: string): string =>
   path.join(cursorHome, 'cli-config.statusline.pre-cursor-memory.json')
 
-export const isOwnedStatusLine = (value: unknown): boolean =>
-  Boolean(value) &&
-  typeof value === 'object' &&
-  typeof (value as StatusLineConfig).command === 'string' &&
-  OWNED_STATUSLINE.test((value as StatusLineConfig).command)
+export const isOwnedStatusLine = (value: unknown, expectedCommands: string[] = []): boolean => {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    typeof (value as StatusLineConfig).command !== 'string'
+  ) {
+    return false
+  }
+  const script = nodeScriptPath((value as StatusLineConfig).command, STATUSLINE_MARKER)
+  if (!script) return false
+  return (
+    OWNED_STATUSLINE.test(script) ||
+    expectedCommands.some((command) => nodeScriptPath(command, STATUSLINE_MARKER) === script)
+  )
+}
 
-const quoteArg = (value: string): string => (/\s/.test(value) ? `"${value}"` : value)
-
-export function buildStatusLine(repoRoot: string, nodePath: string): StatusLineConfig {
+export function buildStatusLine(
+  repoRoot: string,
+  nodePath: string,
+  legacy = false,
+): StatusLineConfig {
   const script = path.join(repoRoot, 'statusline', 'statusline.mjs')
+  const legacyQuote = (value: string) => (/\s/.test(value) ? `"${value}"` : value)
   return {
     type: 'command',
-    command: `${quoteArg(nodePath)} ${quoteArg(script)}`,
+    command: legacy
+      ? `${legacyQuote(nodePath)} ${legacyQuote(script)}`
+      : `${quoteShellArgument(nodePath)} ${quoteShellArgument(script)}${STATUSLINE_MARKER}`,
     padding: 0,
     updateIntervalMs: 2000,
     timeoutMs: 2000,
@@ -62,10 +79,15 @@ function writeCliConfig(cursorHome: string, config: CliConfig): void {
  * Points the CLI status line at this repo's script. Returns false when the CLI
  * has not created cli-config.json yet, so the installer never invents one.
  */
-export function installStatusLine(cursorHome: string, statusLine: StatusLineConfig): boolean {
+export function installStatusLine(
+  cursorHome: string,
+  statusLine: StatusLineConfig,
+  legacyCommand?: string,
+): boolean {
   const config = readCliConfig(cursorHome)
   if (!config) return false
-  if (config.statusLine !== undefined && !isOwnedStatusLine(config.statusLine)) {
+  const expectedCommands = [statusLine.command, ...(legacyCommand ? [legacyCommand] : [])]
+  if (config.statusLine !== undefined && !isOwnedStatusLine(config.statusLine, expectedCommands)) {
     fs.writeFileSync(
       statusLineBackupPath(cursorHome),
       `${JSON.stringify(config.statusLine, null, 2)}\n`,
@@ -78,9 +100,9 @@ export function installStatusLine(cursorHome: string, statusLine: StatusLineConf
 }
 
 /** Restores the previous status line, or removes ours when there was none. */
-export function uninstallStatusLine(cursorHome: string): boolean {
+export function uninstallStatusLine(cursorHome: string, expectedCommands: string[] = []): boolean {
   const config = readCliConfig(cursorHome)
-  if (!config || !isOwnedStatusLine(config.statusLine)) return false
+  if (!config || !isOwnedStatusLine(config.statusLine, expectedCommands)) return false
   const backup = statusLineBackupPath(cursorHome)
   const { statusLine: _owned, ...rest } = config
   const restored = fs.existsSync(backup)

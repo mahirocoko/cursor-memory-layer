@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { type InitMemoryResult, initMemory } from '../memory/init.ts'
@@ -23,7 +24,7 @@ export type InstallReport = {
   memory: InitMemoryResult
   hooksFile: string
   hooksBackup: string | null
-  skillFile: string
+  skillFile: string | null
   commands: string[]
   statusLine: 'installed' | 'no-cli-config' | 'disabled'
   binLink: string | null
@@ -77,6 +78,56 @@ const skillPaths = (options: Pick<InstallOptions, 'repoRoot' | 'cursorHome'>) =>
   target: path.join(options.cursorHome, 'skills', 'cursor-memory', 'SKILL.md'),
 })
 
+const SKILL_MARKER = '<!-- installed by cursor-memory-layer -->'
+// Exact pre-receipt entry shipped at f21fc28; supports a safe upgrade, not name-based adoption.
+const LEGACY_SKILL_SHA256 = 'ea2ff33c1eb254ee6ddf275110735f269e904ec788f282c061984de4328e685a'
+const skillReceiptPath = (target: string): string =>
+  path.join(path.dirname(target), '.cursor-memory-owned.json')
+const hashSkill = (content: string): string => createHash('sha256').update(content).digest('hex')
+const hasLinkedSkillPath = (target: string): boolean =>
+  [path.dirname(target), target, skillReceiptPath(target)].some((file) =>
+    fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink(),
+  )
+
+/** A receipt binds only the installed entry, never user-authored companion files. */
+const isOwnedSkill = (target: string): boolean => {
+  if (hasLinkedSkillPath(target)) return false
+  try {
+    const receipt = JSON.parse(fs.readFileSync(skillReceiptPath(target), 'utf-8'))
+    const content = fs.readFileSync(target, 'utf-8')
+    return content.endsWith(`${SKILL_MARKER}\n`) && receipt.sha256 === hashSkill(content)
+  } catch {
+    return false
+  }
+}
+
+const installSkill = (source: string, target: string, notes: string[]): string | null => {
+  if (hasLinkedSkillPath(target)) {
+    notes.push(`${target} or its ownership path is a symlink; left it alone.`)
+    return null
+  }
+  const content = fs.readFileSync(source, 'utf-8')
+  if (fs.existsSync(target) && !isOwnedSkill(target)) {
+    // Adopt the exact pre-receipt shipped entry only; do not guess from its name.
+    const existing = fs.readFileSync(target, 'utf-8')
+    if (existing !== content && hashSkill(existing) !== LEGACY_SKILL_SHA256) {
+      notes.push(`${target} is unowned or locally modified; left it alone.`)
+      return null
+    }
+  } else if (!fs.existsSync(target) && fs.existsSync(path.dirname(target))) {
+    notes.push(`${path.dirname(target)} already exists without our entry; left it alone.`)
+    return null
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  const installed = `${content.trimEnd()}\n\n${SKILL_MARKER}\n`
+  fs.writeFileSync(target, installed)
+  fs.writeFileSync(
+    skillReceiptPath(target),
+    `${JSON.stringify({ sha256: hashSkill(installed) })}\n`,
+  )
+  return target
+}
+
 const binTarget = (repoRoot: string): string => path.join(repoRoot, 'bin', 'cursor-memory')
 
 export function install(options: InstallOptions): InstallReport {
@@ -89,12 +140,14 @@ export function install(options: InstallOptions): InstallReport {
     mergeOwnedHooks(
       readHooksConfig(hooksFile),
       buildOwnedHooks(options.repoRoot, options.nodePath),
+      Object.values(buildOwnedHooks(options.repoRoot, options.nodePath, true)).map(
+        (entry) => entry.command,
+      ),
     ),
   )
 
   const skill = skillPaths(options)
-  fs.mkdirSync(path.dirname(skill.target), { recursive: true })
-  fs.copyFileSync(skill.source, skill.target)
+  const skillFile = installSkill(skill.source, skill.target, notes)
 
   const commands: string[] = []
   for (const command of ownedCommands(options)) {
@@ -112,6 +165,7 @@ export function install(options: InstallOptions): InstallReport {
     statusLine = installStatusLine(
       options.cursorHome,
       buildStatusLine(options.repoRoot, options.nodePath),
+      buildStatusLine(options.repoRoot, options.nodePath, true).command,
     )
       ? 'installed'
       : 'no-cli-config'
@@ -143,7 +197,7 @@ export function install(options: InstallOptions): InstallReport {
     memory,
     hooksFile,
     hooksBackup,
-    skillFile: skill.target,
+    skillFile,
     commands,
     statusLine,
     binLink,
@@ -155,22 +209,42 @@ export function uninstall(options: InstallOptions): string[] {
   const actions: string[] = []
   const hooksFile = path.join(options.cursorHome, 'hooks.json')
   if (fs.existsSync(hooksFile)) {
-    const backup = writeHooksConfig(hooksFile, removeOwnedHooks(readHooksConfig(hooksFile)))
+    const expectedCommands = [false, true].flatMap((legacy) =>
+      Object.values(buildOwnedHooks(options.repoRoot, options.nodePath, legacy)).map(
+        (entry) => entry.command,
+      ),
+    )
+    const backup = writeHooksConfig(
+      hooksFile,
+      removeOwnedHooks(readHooksConfig(hooksFile), expectedCommands),
+    )
     actions.push(
       backup ? `Removed memory hooks from ${hooksFile}.` : `No memory hooks in ${hooksFile}.`,
     )
   }
-  const skillDir = path.dirname(skillPaths(options).target)
-  if (fs.existsSync(skillDir)) {
-    fs.rmSync(skillDir, { recursive: true })
-    actions.push(`Removed ${skillDir}.`)
+  const skillTarget = skillPaths(options).target
+  const skillDir = path.dirname(skillTarget)
+  if (isOwnedSkill(skillTarget)) {
+    fs.rmSync(skillTarget)
+    fs.rmSync(skillReceiptPath(skillTarget))
+    if (fs.readdirSync(skillDir).length === 0) fs.rmdirSync(skillDir)
+    actions.push(`Removed installed skill entry ${skillTarget}; kept any companion files.`)
+  } else if (fs.existsSync(skillDir)) {
+    actions.push(`Kept unowned or locally modified skill at ${skillDir}.`)
   }
   for (const command of ownedCommands(options)) {
     if (!isOwnedCommandFile(command.target)) continue
     fs.rmSync(command.target)
     actions.push(`Removed ${command.target}.`)
   }
-  if (uninstallStatusLine(options.cursorHome)) {
+  if (
+    uninstallStatusLine(
+      options.cursorHome,
+      [false, true].map(
+        (legacy) => buildStatusLine(options.repoRoot, options.nodePath, legacy).command,
+      ),
+    )
+  ) {
     actions.push('Restored the previous CLI status line.')
   }
   if (options.binDir) {

@@ -118,7 +118,7 @@ describe('preToolUse guard', () => {
     tool_input: { command, working_directory: workingDirectory },
   })
 
-  test('asks before destructive commands against memory', () => {
+  test('denies destructive commands because Cursor does not enforce preToolUse ask', () => {
     for (const input of [
       shell(`git -C ${memoryRoot} reset --hard HEAD~1`),
       shell('rm -rf ~/.cursor/memory'),
@@ -128,7 +128,7 @@ describe('preToolUse guard', () => {
     ]) {
       assert.equal(
         (evaluateShellCommand(input, memoryRoot) as { permission?: string }).permission,
-        'ask',
+        'deny',
       )
     }
   })

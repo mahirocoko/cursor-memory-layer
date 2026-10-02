@@ -21,7 +21,7 @@ console.log(
 console.log(
   `Hooks: ${report.hooksFile}${report.hooksBackup ? ` (backup: ${report.hooksBackup})` : ''}`,
 )
-console.log(`Skill: ${report.skillFile}`)
+if (report.skillFile) console.log(`Skill: ${report.skillFile}`)
 console.log(
   `Commands: ${report.commands.map((file) => `/${path.basename(file, '.md')}`).join(', ')}`,
 )
