@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { isSharedOwnerPath, type MemorySettings, resolveEffectiveSettings } from './settings.ts'
 
 export type MemoryRepositoryState = 'uninitialized' | 'clean' | 'dirty' | 'conflict' | 'error'
 
@@ -253,12 +254,26 @@ export function getMemoryHeadRevision(memoryRoot: string): string | null {
   return result.status === 0 ? result.stdout.trim() : null
 }
 
+function assertProtectedWriterPreflight(
+  relativePath: string,
+  options?: { settings?: MemorySettings },
+): void {
+  const settings = resolveEffectiveSettings(options?.settings)
+  if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+    throw new Error(
+      `Cannot directly mutate protected shared owner "${relativePath}" while sharedRead is enabled. Queue changes through shared proposals or disable sharedRead.`,
+    )
+  }
+}
+
 export function writeMemoryFile(
   memoryRoot: string,
   input: string,
   content: string,
+  options?: { settings?: MemorySettings },
 ): ResolvedMemoryPath {
   const resolved = resolveMemoryPath(memoryRoot, input)
+  assertProtectedWriterPreflight(resolved.relativePath, options)
   fs.mkdirSync(path.dirname(resolved.absolutePath), { recursive: true })
   resolveMemoryPath(memoryRoot, input)
   const tempPath = `${resolved.absolutePath}.tmp-${process.pid}-${Date.now()}`
@@ -267,16 +282,26 @@ export function writeMemoryFile(
   return resolved
 }
 
-export function deleteMemoryFile(memoryRoot: string, input: string): ResolvedMemoryPath {
+export function deleteMemoryFile(
+  memoryRoot: string,
+  input: string,
+  options?: { settings?: MemorySettings },
+): ResolvedMemoryPath {
   const resolved = resolveMemoryPath(memoryRoot, input)
+  assertProtectedWriterPreflight(resolved.relativePath, options)
   if (fs.existsSync(resolved.absolutePath)) fs.unlinkSync(resolved.absolutePath)
   return resolved
 }
 
-export function commitMemoryPaths(options: CommitMemoryPathsOptions): CommitMemoryPathsResult {
+export function commitMemoryPaths(
+  options: CommitMemoryPathsOptions & { settings?: MemorySettings },
+): CommitMemoryPathsResult {
   const relativePaths = [...new Set(options.relativePaths.map(normalizeMemoryRelativePath))]
   if (relativePaths.length === 0) return { committed: false }
-  for (const relativePath of relativePaths) resolveMemoryPath(options.memoryRoot, relativePath)
+  for (const relativePath of relativePaths) {
+    resolveMemoryPath(options.memoryRoot, relativePath)
+    assertProtectedWriterPreflight(relativePath, options)
+  }
   assertNoUnrelatedChanges(options.memoryRoot, relativePaths)
 
   runGit(options.memoryRoot, ['add', '-A', '--', ...relativePaths])

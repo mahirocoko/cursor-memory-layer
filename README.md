@@ -116,11 +116,41 @@ Run `cursor-memory --help` for the full list.
     "fallbackModel": "auto",
     "timeoutMs": 300000,
     "agentCommand": "cursor-agent"
+  },
+  "sharedRead": {
+    "enabled": false,
+    "sourceRoot": null
   }
 }
 ```
 
 `"model": "inherit"` uses the chat's model; any slug from `cursor-agent --list-models` pins one. Unknown slugs fall back to `fallbackModel`.
+
+### Shared communication (optional, no Letta installation required)
+
+Opt-in, off-by-default shared communication integration. When enabled (`cursor-memory shared enable --source <path>` or `sharedRead.enabled: true`), Cursor memory reads a shared communication baseline from `sourceRoot` for `system/human/prefs/communication.md`.
+
+**Using Cursor without Letta:** install and use this layer normally. Native memory, recall, and reflection do not depend on Letta. Leave shared mode disabled unless you want an external baseline.
+
+**Sharing without Letta:** the source can be any distinct local Git repository with a committed, regular Markdown file at `system/human/prefs/communication.md`. Letta is one possible source, not a required runtime, service, account, or package. Use the repository root, not the file path or a subdirectory. Keep communication preferences there; personas and model rosters stay native. Only committed revisions are read, and the source must satisfy the existing content, size, and path safety checks.
+
+- **Off by default**: `sharedRead.enabled` defaults to `false`. Default Cursor memory behavior is preserved exactly when disabled.
+- **Revision pinning**: reads exactly one pinned full SHA per assembly from committed source Git object storage (`git show <sha>:system/human/prefs/communication.md`). Never loads dirty or uncommitted content from the source repository.
+- **Local Git != provider-offline**: reading locally from Git does not mean your chats or models are offline. Injected context is still sent to the Cursor model provider during normal chat turns.
+- **Proposals require review**: when shared mode is enabled, mutations targeting `human/prefs/communication.md` are diverted to an atomic private proposal queue in `.git/cursor-memory/proposals/`. Proposals bind the source SHA and native origin. Pending proposals never become active automatically or perform two-way sync; committing to canonical source remains an explicit human/source-owner gate. `--force` does not bypass this protection.
+- **Native learning preserved**: all other native memory files (`human/identity.md`, `coding.md`, `workflow.md`, project files, reference files, skills) remain normally writable and versioned in the local native repo.
+- **Read-only is cooperative, not OS security**: read-only flags and diversion are cooperative application invariants, not OS-level sandboxing.
+- **Bounded integration**: this only integrates the single fixed communication preferences owner; it makes no claim of whole-memory or cross-project synchronisation.
+
+```bash
+cursor-memory shared status                 # inspect shared source, pinned revision, diagnostics
+cursor-memory shared proposals              # list pending proposals and check if base revision is stale
+cursor-memory shared show <id>              # show proposal metadata, diff, and status
+cursor-memory shared export <id> [--out f]  # export proposal for review
+cursor-memory shared enable --source <path> # enable shared read mode pointing at source Git repo
+cursor-memory shared disable                # disable shared read mode
+cursor-memory shared reject <id>            # discard a proposal without applying it
+```
 
 Environment overrides: `CURSOR_MEMORY_DIR`, `CURSOR_HOME`, `CURSOR_PROJECTS_DIR`, `CURSOR_MEMORY_REFLECTION=0` (turn model-driven reflection off; session end still saves lasting-intent notes), `CURSOR_MEMORY_AGENT_COMMAND`, `CURSOR_MEMORY_DREAM_WORKSPACE`, `CURSOR_MEMORY_BACKUP_DIR`. `CURSOR_HOME` is this layer's override, not a Cursor CLI setting; when Cursor uses `CURSOR_CONFIG_DIR` or Linux/BSD `XDG_CONFIG_HOME`, set `CURSOR_HOME` to the same effective directory for install and runtime.
 

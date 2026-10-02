@@ -15,7 +15,7 @@ export type HooksConfig = {
 }
 
 const OWNED_SCRIPT =
-  /[/\\]cursor-memory-layer[/\\]src[/\\]hooks[/\\](?:session-start|session-end|stop|pre-compact|pre-tool-use)\.ts$/
+  /[/\\]cursor-memory-layer(?:[/\\]\.letta[/\\]worktrees[/\\][^/\\]+)?[/\\]src[/\\]hooks[/\\](?:session-start|session-end|stop|pre-compact|pre-tool-use)\.ts$/
 const HOOK_MARKER = ' # cursor-memory-layer:hook'
 
 export const isOwnedHook = (entry: HookEntry, expectedCommands: string[] = []): boolean => {

@@ -7,6 +7,7 @@ import {
   renderCommittedMemoryProjection,
 } from '../memory/projection.ts'
 import { isMemoryRepository } from '../memory/repository.ts'
+import type { MemorySettings } from '../memory/settings.ts'
 import {
   firstWorkspaceRoot,
   type HookInput,
@@ -20,6 +21,7 @@ export type SessionStartOutput = { additional_context?: string }
 export function buildSessionStartOutput(
   input: HookInput,
   memoryRoot: string = getMemoryRoot(),
+  settings?: MemorySettings,
 ): SessionStartOutput {
   const workspace = firstWorkspaceRoot(input) || process.cwd()
   if (isDreamSession(workspace)) return {}
@@ -28,7 +30,7 @@ export function buildSessionStartOutput(
     rememberActiveConversation(memoryRoot, conversationId)
   }
   const projectSlug = resolveProjectSlug(workspace, memoryRoot)
-  const projection = inspectCommittedMemoryProjection(memoryRoot, projectSlug)
+  const projection = inspectCommittedMemoryProjection(memoryRoot, projectSlug, settings)
   return { additional_context: renderCommittedMemoryProjection(projection) }
 }
 

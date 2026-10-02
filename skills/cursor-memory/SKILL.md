@@ -115,6 +115,27 @@ Grooming lowers the tokens every chat pays for without losing a rule that matter
 - Move first, cut second: write the `reference/` file with the moved lines verbatim, then shrink core. The CLI refuses an always-loaded edit that loses three or more lines that exist nowhere else in memory; `--drop "<line>"` names a line the human agreed to remove and is recorded in the commit message.
 - Groom one file per pass, and report the commit shas so any step can be reverted. Without a named file, start with an overview of every loaded file, recommend one, and ask before reading any file whole.
 
+## Shared memory (Letta / MemFS integration)
+
+When enabled, `cursor-memory` integrates a shared communication preferences baseline from a canonical Git repository (e.g. Letta / MemFS) at `sourceRoot` for the fixed owner `system/human/prefs/communication.md`.
+
+- **Off by default**: `sharedRead.enabled` defaults to `false`. Enable via `cursor-memory shared enable --source <path>` or configure in `~/.cursor/cursor-memory.json`.
+- **Revision pinning**: reads exactly one pinned full SHA per assembly from committed source Git object storage (`git show <sha>:system/human/prefs/communication.md`). Never loads dirty or uncommitted working-copy content.
+- **Local Git != provider-offline**: reading locally from Git does not mean your chats or models are offline. Injected context is still sent to the Cursor model provider during normal chat turns.
+- **Proposals require review**: when shared mode is enabled, attempts to mutate the shared communication owner (`human/prefs/communication.md`) are diverted to a private pending proposal queue in `.git/cursor-memory/proposals/`. Proposals bind the source revision and native origin. They are never automatically merged or committed to source without explicit human review. `--force` does not bypass this protection.
+- **Native learning preserved**: all other native memory files (`human/identity.md`, `coding.md`, `workflow.md`, project overviews, reference files, skills) remain normally writable and versioned in the local native repo.
+- **Read-only is cooperative, not OS security**: read-only flags and diversion are cooperative application invariants, not OS-level sandboxing.
+- **Bounded integration**: this only integrates the single fixed communication preferences owner; it makes no claim of whole-memory or cross-project synchronisation.
+
+```bash
+cursor-memory shared status                 # inspect shared source, pinned revision, diagnostics
+cursor-memory shared proposals              # list pending proposals and check if base revision is stale
+cursor-memory shared show <id>              # show proposal metadata, diff, and status
+cursor-memory shared export <id> [--out f]  # export proposal for review
+cursor-memory shared enable --source <path> # enable shared read mode pointing at source Git repo
+cursor-memory shared disable                # disable shared read mode
+```
+
 ## History and backups
 
 - `cursor-memory diff [<rev> [<rev>]]`, `cursor-memory export --out <dir>`.

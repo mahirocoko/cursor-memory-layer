@@ -16,6 +16,8 @@ import {
 } from '../memory/repository.ts'
 import { assertRetained, contentLines } from '../memory/retention.ts'
 import { classifyMemoryPath } from '../memory/scope.ts'
+import { type MemorySettings, resolveEffectiveSettings } from '../memory/settings.ts'
+import { FIXED_SHARED_OWNER, isSharedOwnerPath } from '../memory/shared.ts'
 import type { DreamOperation } from './prompt.ts'
 
 export type ApplyDreamResult = {
@@ -136,8 +138,10 @@ export function planDreamOperations(options: {
   memoryRoot: string
   baseRevision: string
   operations: DreamOperation[]
+  settings?: MemorySettings
 }): { pending: PendingChange[]; rejected: string[] } {
   const { memoryRoot } = options
+  const settings = resolveEffectiveSettings(options.settings)
   const changedAfterSnapshot = changedSince(
     memoryRoot,
     options.baseRevision,
@@ -153,6 +157,11 @@ export function planDreamOperations(options: {
     )
     try {
       const { relativePath, tier } = classifyMemoryPath(operation.path)
+      if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+        throw new Error(
+          `protected shared owner ${FIXED_SHARED_OWNER} cannot be rewritten during reflection`,
+        )
+      }
       if (tier === 'archive') throw new Error('reflection does not write archives/')
       if (changedAfterSnapshot.has(relativePath)) {
         throw new Error(
@@ -226,12 +235,29 @@ export function applyDreamOperations(options: {
   baseRevision: string
   operations: DreamOperation[]
   message: string
+  settings?: MemorySettings
 }): ApplyDreamResult {
   const { memoryRoot } = options
-  assertNoUnrelatedChanges(memoryRoot, [])
-  const { pending, rejected } = planDreamOperations(options)
+  const settings = resolveEffectiveSettings(options.settings)
+  const { pending, rejected } = planDreamOperations({ ...options, settings })
+  if (
+    settings.sharedRead?.enabled &&
+    options.operations.length > 1 &&
+    rejected.length > 0 &&
+    pending.length > 0
+  ) {
+    return {
+      committed: false,
+      applied: [],
+      rejected: [
+        'Mixed batch rejected: cannot partially apply native changes when shared/other operations fail. Review required.',
+        ...rejected,
+      ],
+    }
+  }
   if (pending.length === 0) return { committed: false, applied: [], rejected }
 
+  assertNoUnrelatedChanges(memoryRoot, [])
   const paths = pending.map((change) => change.relativePath)
   try {
     for (const change of pending) {

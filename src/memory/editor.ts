@@ -10,11 +10,19 @@ import {
   readCommittedMemoryFile,
   resolveMemoryPath,
   revertMemoryCommit,
+  runGit,
   writeMemoryFile,
 } from './repository.ts'
 import { assertRetained } from './retention.ts'
 import { classifyMemoryPath, isSkillEntryPath, requiresFrontmatter } from './scope.ts'
 import { assertNoSecrets } from './secrets.ts'
+import { type MemorySettings, resolveEffectiveSettings } from './settings.ts'
+import {
+  createProposal,
+  FIXED_SHARED_OWNER,
+  isSharedOwnerPath,
+  NATIVE_COMMUNICATION_PATH,
+} from './shared.ts'
 
 const SKILL_FILE_MAX_CHARS = 20_000
 
@@ -24,6 +32,7 @@ export type EditOptions = {
   force?: boolean
   /** Lines the human agreed to remove from an always-loaded file; see {@link assertRetained}. */
   drop?: string[]
+  settings?: MemorySettings
 }
 
 const withDropNote = (message: string, drop?: string[]): string =>
@@ -33,6 +42,8 @@ const withDropNote = (message: string, drop?: string[]): string =>
 
 export type EditResult = CommitMemoryPathsResult & {
   paths: string[]
+  proposalId?: string
+  status?: 'committed' | 'proposed'
 }
 
 export const currentDocument = (memoryRoot: string, relativePath: string) => {
@@ -161,6 +172,25 @@ export function writeMemory(
   options: EditOptions & { description?: string; readOnly?: boolean },
 ): EditResult {
   const { relativePath, tier } = classifyMemoryPath(path)
+  const settings = resolveEffectiveSettings(options.settings)
+  if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+    const proposal = createProposal({
+      memoryRoot: options.memoryRoot,
+      targetPath: FIXED_SHARED_OWNER,
+      operation: 'write',
+      sourceRoot: settings.sharedRead.sourceRoot,
+      nativeOriginPath: relativePath,
+      content: input,
+      description: options.description,
+      message: options.message,
+    })
+    return {
+      committed: false,
+      paths: [NATIVE_COMMUNICATION_PATH],
+      proposalId: proposal.id,
+      status: 'proposed',
+    }
+  }
   assertNoUnrelatedChanges(options.memoryRoot, [relativePath])
   assertWritable(options.memoryRoot, relativePath, options.force)
   const existing = currentDocument(options.memoryRoot, relativePath)
@@ -204,6 +234,25 @@ export function appendMemory(
   const { relativePath } = classifyMemoryPath(path)
   const addition = text.trim()
   if (!addition) throw new Error('Nothing to append.')
+  const settings = resolveEffectiveSettings(options.settings)
+  if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+    const proposal = createProposal({
+      memoryRoot: options.memoryRoot,
+      targetPath: FIXED_SHARED_OWNER,
+      operation: 'append',
+      sourceRoot: settings.sharedRead.sourceRoot,
+      nativeOriginPath: relativePath,
+      content: addition,
+      description: options.description,
+      message: options.message,
+    })
+    return {
+      committed: false,
+      paths: [NATIVE_COMMUNICATION_PATH],
+      proposalId: proposal.id,
+      status: 'proposed',
+    }
+  }
   const existing = currentDocument(options.memoryRoot, relativePath)
   if (existing && existing.diagnostics.length > 0) throw new Error(existing.diagnostics.join('\n'))
   const listItem = /^\s*(?:[-*+]|\d+\.)\s/
@@ -225,6 +274,25 @@ export function replaceInMemory(
 ): EditResult {
   const { relativePath } = classifyMemoryPath(path)
   if (!oldText) throw new Error('--old must not be empty.')
+  const settings = resolveEffectiveSettings(options.settings)
+  if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+    const proposal = createProposal({
+      memoryRoot: options.memoryRoot,
+      targetPath: FIXED_SHARED_OWNER,
+      operation: 'replace',
+      sourceRoot: settings.sharedRead.sourceRoot,
+      nativeOriginPath: relativePath,
+      content: `Replace:\nOld: ${oldText}\nNew: ${newText}`,
+      description: options.message,
+      message: options.message,
+    })
+    return {
+      committed: false,
+      paths: [NATIVE_COMMUNICATION_PATH],
+      proposalId: proposal.id,
+      status: 'proposed',
+    }
+  }
   const content = readCommittedMemoryFile(options.memoryRoot, relativePath)
   if (content === null) throw new Error(`${relativePath} does not exist in committed memory.`)
   const occurrences = content.split(oldText).length - 1
@@ -247,6 +315,12 @@ export function moveMemory(from: string, to: string, options: EditOptions): Edit
   const source = classifyMemoryPath(from).relativePath
   const target = classifyMemoryPath(to).relativePath
   if (source === target) throw new Error('Source and target are the same path.')
+  const settings = resolveEffectiveSettings(options.settings)
+  if (settings.sharedRead?.enabled && (isSharedOwnerPath(source) || isSharedOwnerPath(target))) {
+    throw new Error(
+      `Cannot move protected shared owner ${NATIVE_COMMUNICATION_PATH} while sharedRead is enabled.`,
+    )
+  }
   assertNoUnrelatedChanges(options.memoryRoot, [source, target])
   assertWritable(options.memoryRoot, source, options.force)
   const content = readCommittedMemoryFile(options.memoryRoot, source)
@@ -265,6 +339,25 @@ export function moveMemory(from: string, to: string, options: EditOptions): Edit
 
 export function deleteMemory(path: string, options: EditOptions): EditResult {
   const { relativePath, tier } = classifyMemoryPath(path)
+  const settings = resolveEffectiveSettings(options.settings)
+  if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+    const proposal = createProposal({
+      memoryRoot: options.memoryRoot,
+      targetPath: FIXED_SHARED_OWNER,
+      operation: 'delete',
+      sourceRoot: settings.sharedRead.sourceRoot,
+      nativeOriginPath: relativePath,
+      content: `Delete ${FIXED_SHARED_OWNER}`,
+      description: options.message,
+      message: options.message,
+    })
+    return {
+      committed: false,
+      paths: [NATIVE_COMMUNICATION_PATH],
+      proposalId: proposal.id,
+      status: 'proposed',
+    }
+  }
   assertNoUnrelatedChanges(options.memoryRoot, [relativePath])
   assertWritable(options.memoryRoot, relativePath, options.force)
   const existing = currentDocument(options.memoryRoot, relativePath)
@@ -287,5 +380,19 @@ export function deleteMemory(path: string, options: EditOptions): EditResult {
 }
 
 export function revertMemory(revision: string, options: EditOptions): EditResult {
+  const settings = resolveEffectiveSettings(options.settings)
+  if (settings.sharedRead?.enabled) {
+    const diffTree = runGit(
+      options.memoryRoot,
+      ['diff-tree', '--no-commit-id', '--name-only', '-r', revision],
+      { allowFailure: true },
+    )
+    const affected = diffTree.stdout.split('\n').filter(Boolean)
+    if (affected.some(isSharedOwnerPath)) {
+      throw new Error(
+        `Cannot revert revision ${revision} while sharedRead is enabled: revision affects protected shared owner ${NATIVE_COMMUNICATION_PATH}. Manual review required.`,
+      )
+    }
+  }
   return { ...revertMemoryCommit(options.memoryRoot, revision), paths: [] }
 }

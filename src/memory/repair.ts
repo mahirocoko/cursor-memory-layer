@@ -9,6 +9,7 @@ import {
   runGit,
   writeMemoryFile,
 } from './repository.ts'
+import { isSharedOwnerPath, type MemorySettings, resolveEffectiveSettings } from './settings.ts'
 
 export type RepairResult = {
   status: 'clean' | 'repaired' | 'unresolved' | 'dirty' | 'error'
@@ -40,7 +41,11 @@ const inMerge = (memoryRoot: string): boolean =>
   runGit(memoryRoot, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { allowFailure: true })
     .status === 0
 
-export function repairMemoryRepository(memoryRoot: string): RepairResult {
+export function repairMemoryRepository(
+  memoryRoot: string,
+  options?: { settings?: MemorySettings },
+): RepairResult {
+  const settings = resolveEffectiveSettings(options?.settings)
   const status = getMemoryRepositoryStatus(memoryRoot)
   if (status.state === 'uninitialized' || status.state === 'error') {
     return { status: 'error', paths: [], summary: status.summary }
@@ -56,6 +61,10 @@ export function repairMemoryRepository(memoryRoot: string): RepairResult {
   const unresolved: string[] = []
   const resolved: string[] = []
   for (const relativePath of unmergedPaths(memoryRoot)) {
+    if (settings.sharedRead?.enabled && isSharedOwnerPath(relativePath)) {
+      unresolved.push(relativePath)
+      continue
+    }
     const ours = stageBlob(memoryRoot, relativePath, 2)
     const theirs = stageBlob(memoryRoot, relativePath, 3)
     const chosen = ours !== null && theirs !== null ? chooseContainingSide(ours, theirs) : null
@@ -63,15 +72,30 @@ export function repairMemoryRepository(memoryRoot: string): RepairResult {
       unresolved.push(relativePath)
       continue
     }
-    writeMemoryFile(memoryRoot, relativePath, chosen.endsWith('\n') ? chosen : `${chosen}\n`)
+    writeMemoryFile(memoryRoot, relativePath, chosen.endsWith('\n') ? chosen : `${chosen}\n`, {
+      settings,
+    })
     runGit(memoryRoot, ['add', '--', relativePath])
     resolved.push(relativePath)
   }
+
+  if (settings.sharedRead?.enabled) {
+    const stagedResult = runGit(memoryRoot, ['diff', '--cached', '--name-only'], {
+      allowFailure: true,
+    })
+    const stagedPaths = stagedResult.stdout.split('\n').filter(Boolean)
+    const protectedStaged = stagedPaths.filter(isSharedOwnerPath)
+    if (protectedStaged.length > 0) {
+      unresolved.push(...protectedStaged)
+    }
+  }
+
   if (unresolved.length > 0) {
+    const uniqueUnresolved = [...new Set(unresolved)]
     return {
       status: 'unresolved',
-      paths: unresolved,
-      summary: `Left ${unresolved.length} conflict(s) unresolved: ${unresolved.join(', ')}.`,
+      paths: uniqueUnresolved,
+      summary: `Left ${uniqueUnresolved.length} conflict(s) unresolved: ${uniqueUnresolved.join(', ')}.`,
     }
   }
   runGit(memoryRoot, ['commit', '-m', 'memory: repair unfinished merge'])

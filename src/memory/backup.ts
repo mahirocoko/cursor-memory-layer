@@ -13,6 +13,8 @@ import {
   isMemoryRepository,
   runGit,
 } from './repository.ts'
+import { type MemorySettings, resolveEffectiveSettings } from './settings.ts'
+import { isSharedOwnerPath, NATIVE_COMMUNICATION_PATH } from './shared.ts'
 
 export type BackupInfo = { name: string; path: string; createdAt: string; bytes: number }
 
@@ -66,6 +68,7 @@ export function restoreBackup(
   memoryRoot: string,
   backupDir: string,
   from: string,
+  options?: { settings?: MemorySettings },
 ): { committed: boolean; sha?: string; source: string } {
   requireRepository(memoryRoot)
   assertNoUnrelatedChanges(memoryRoot, [])
@@ -74,6 +77,18 @@ export function restoreBackup(
   runGit(memoryRoot, ['fetch', '-q', '--no-tags', source, `+refs/heads/main:${RESTORE_REF}`])
   try {
     runGit(memoryRoot, ['read-tree', '-u', '--reset', RESTORE_REF])
+    const settings = resolveEffectiveSettings(options?.settings)
+    if (settings.sharedRead?.enabled) {
+      const stagedFiles = runGit(memoryRoot, ['diff', '--cached', '--name-only'], {
+        allowFailure: true,
+      }).stdout
+      const changed = stagedFiles.split('\n').filter(Boolean)
+      if (changed.some(isSharedOwnerPath)) {
+        throw new Error(
+          `Cannot restore backup while sharedRead is enabled: backup affects protected shared owner ${NATIVE_COMMUNICATION_PATH}. Manual review required or disable sharedRead.`,
+        )
+      }
+    }
     const staged = runGit(memoryRoot, ['diff', '--cached', '--quiet'], { allowFailure: true })
     if (staged.status === 0) return { committed: false, source }
     runGit(memoryRoot, ['commit', '-q', '-m', `memory: restore from ${path.basename(source)}`])

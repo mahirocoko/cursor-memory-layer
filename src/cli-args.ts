@@ -13,6 +13,7 @@ const VALUE_OPTIONS = new Set([
   '--out',
   '--from',
   '--drop',
+  '--source',
 ])
 
 /**

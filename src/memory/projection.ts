@@ -20,6 +20,13 @@ import {
   readCommittedMemoryFile,
 } from './repository.ts'
 import { classifyMemoryPath, isMemoryIndexPath, isSkillEntryPath } from './scope.ts'
+import { type MemorySettings, resolveEffectiveSettings } from './settings.ts'
+import {
+  FIXED_SHARED_OWNER,
+  inspectSharedSource,
+  isSharedOwnerPath,
+  mergeCommunicationDocuments,
+} from './shared.ts'
 
 export type MemorySkill = {
   relativePath: string
@@ -49,6 +56,11 @@ export type MemoryProjection = {
   lastReflection: MemoryLogEntry | null
   diagnostics: string[]
   repository: MemoryRepositoryStatus
+  sharedSource?: {
+    sourceRoot: string
+    pinnedSha: string
+    sharedOwner: string
+  } | null
 }
 
 export function listCommittedSkills(memoryRoot: string, diagnostics: string[] = []): MemorySkill[] {
@@ -123,7 +135,9 @@ const readDocuments = (
 export function inspectCommittedMemoryProjection(
   memoryRoot: string,
   projectSlug: string,
+  settingsOverride?: MemorySettings,
 ): MemoryProjection {
+  const settings = resolveEffectiveSettings(settingsOverride)
   const diagnostics: string[] = []
   const markdown = committedMarkdown(memoryRoot, '')
   const scoped = (tier: 'system' | 'reference', owner: string | null) =>
@@ -135,17 +149,48 @@ export function inspectCommittedMemoryProjection(
         return false
       }
     })
+
+  let globalSystem = readDocuments(
+    memoryRoot,
+    scoped('system', null),
+    'global',
+    'system',
+    diagnostics,
+  )
+
+  let sharedSource: MemoryProjection['sharedSource'] = null
+  if (settings.sharedRead?.enabled) {
+    const inspection = inspectSharedSource(settings.sharedRead, memoryRoot)
+    if (!inspection.valid) {
+      diagnostics.push(...inspection.diagnostics)
+    } else if (inspection.document && inspection.pinnedSha && inspection.sourceRoot) {
+      sharedSource = {
+        sourceRoot: inspection.sourceRoot,
+        pinnedSha: inspection.pinnedSha,
+        sharedOwner: FIXED_SHARED_OWNER,
+      }
+      const nativeDocIndex = globalSystem.findIndex((d) => isSharedOwnerPath(d.relativePath))
+      const nativeDoc = nativeDocIndex !== -1 ? globalSystem[nativeDocIndex] : null
+      const { mergedDoc, diagnostics: mergeDiags } = mergeCommunicationDocuments(
+        inspection.document,
+        nativeDoc,
+        inspection,
+      )
+      diagnostics.push(...mergeDiags)
+
+      if (nativeDocIndex !== -1) {
+        globalSystem = globalSystem.map((d, idx) => (idx === nativeDocIndex ? mergedDoc : d))
+      } else {
+        globalSystem.push(mergedDoc)
+      }
+    }
+  }
+
   return {
     memoryRoot: path.resolve(memoryRoot),
     revision: getMemoryHeadRevision(memoryRoot),
     projectSlug,
-    globalSystem: readDocuments(
-      memoryRoot,
-      scoped('system', null),
-      'global',
-      'system',
-      diagnostics,
-    ),
+    globalSystem,
     projectSystem: readDocuments(
       memoryRoot,
       scoped('system', projectSlug),
@@ -167,15 +212,24 @@ export function inspectCommittedMemoryProjection(
     lastReflection: findLastReflection(memoryRoot),
     diagnostics,
     repository: getMemoryRepositoryStatus(memoryRoot),
+    sharedSource,
   }
 }
 
 const renderContract = (projection: MemoryProjection): string => {
   const revision = projection.revision ? projection.revision.slice(0, 8) : 'none'
   const slug = projection.projectSlug
-  return [
+  const contractLines = [
     '# Cursor Memory',
     `Memory root: ${projection.memoryRoot} (git, committed revision ${revision}). Project slug: ${slug}.`,
+  ]
+  if (projection.sharedSource) {
+    contractLines.push(
+      `Shared communication: ${projection.sharedSource.sourceRoot} (git, committed revision ${projection.sharedSource.pinnedSha.slice(0, 8)}).`,
+    )
+  }
+  return [
+    ...contractLines,
     '',
     'You are a stateful agent that learns from experience, not a session that ends when this chat does. The model is the engine; you are what this memory holds. Each chat starts from what past chats committed here, and what you commit now shapes every chat after it.',
     '',

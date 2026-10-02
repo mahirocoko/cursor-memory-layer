@@ -13,7 +13,8 @@ export type StatusLineConfig = {
 
 type CliConfig = { statusLine?: unknown; [key: string]: unknown }
 
-const OWNED_STATUSLINE = /[/\\]cursor-memory-layer[/\\]statusline[/\\]statusline\.mjs$/
+const OWNED_STATUSLINE =
+  /[/\\]cursor-memory-layer(?:[/\\]\.letta[/\\]worktrees[/\\][^/\\]+)?[/\\]statusline[/\\]statusline\.mjs$/
 const STATUSLINE_MARKER = ' # cursor-memory-layer:statusline'
 
 export const cliConfigPath = (cursorHome: string): string =>

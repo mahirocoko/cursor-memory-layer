@@ -48,7 +48,14 @@ import {
 import { repairMemoryRepository } from './memory/repair.ts'
 import { getMemoryLog, readCommittedMemoryFile } from './memory/repository.ts'
 import { searchMemory } from './memory/search.ts'
-import { loadSettings } from './memory/settings.ts'
+import { getSettingsPath, loadSettings, saveSettings } from './memory/settings.ts'
+import {
+  exportProposal,
+  FIXED_SHARED_OWNER,
+  getProposal,
+  inspectSharedSource,
+  listProposals,
+} from './memory/shared.ts'
 import { openInBrowser, writePalace } from './palace/generate.ts'
 import { rankTranscripts } from './recall/rank.ts'
 import { cursorProjectKey, listTranscriptFiles, readTranscript } from './recall/transcripts.ts'
@@ -95,6 +102,15 @@ Care and history:
   cursor-memory backup | backups | restore --from <name|path> --force
   cursor-memory remote set <url> | unset | status | push | pull
 
+Shared memory (Letta integration):
+  cursor-memory shared [status|inspect|provenance] [--json]
+                                                  Inspect shared communication source and status
+  cursor-memory shared proposals [--json]         List pending shared communication proposals
+  cursor-memory shared show <id> [--json]         Show details of a proposal
+  cursor-memory shared export <id> [--out <file>] Export a proposal for review
+  cursor-memory shared enable [--source <path>]   Enable shared read mode
+  cursor-memory shared disable                    Disable shared read mode
+
 Write commands read the body from stdin when --body is absent. Every write is a
 path-scoped git commit; add --message <text> to name it and --force to change a
 read_only file. Memory root: $CURSOR_MEMORY_DIR or ~/.cursor/memory. Settings:
@@ -119,6 +135,12 @@ const latestTranscript = (workspace: string): string | null => {
 const readStdin = (): string => (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf-8'))
 
 const printEdit = (result: EditResult): void => {
+  if (result.status === 'proposed' || result.proposalId) {
+    console.log(
+      `Shared communication path is protected while sharedRead is enabled.\nMutation diverted to proposal queue: ${result.proposalId}.\nTo inspect: cursor-memory shared show ${result.proposalId}`,
+    )
+    return
+  }
   if (!result.committed) {
     console.log('No change; memory already matches.')
     return
@@ -144,6 +166,7 @@ function main(argv: string[]): void {
       model: { type: 'string' },
       out: { type: 'string' },
       from: { type: 'string' },
+      source: { type: 'string' },
       drop: { type: 'string', multiple: true },
       'no-open': { type: 'boolean' },
       'dry-run': { type: 'boolean' },
@@ -202,6 +225,7 @@ function main(argv: string[]): void {
         recent: getMemoryLog(memoryRoot, 5).map(
           (entry) => `${entry.sha.slice(0, 8)} ${entry.subject}`,
         ),
+        sharedSource: projection.sharedSource,
       }
       if (values.json) {
         console.log(JSON.stringify(summary, null, 2))
@@ -210,6 +234,11 @@ function main(argv: string[]): void {
       console.log(`Memory root: ${summary.memoryRoot}`)
       console.log(`Repository: ${summary.repository.summary}`)
       console.log(`Revision: ${summary.revision?.slice(0, 8) || 'none'}  Project: ${projectSlug}`)
+      if (summary.sharedSource) {
+        console.log(
+          `Shared source: ${summary.sharedSource.sourceRoot} (git, revision ${summary.sharedSource.pinnedSha.slice(0, 8)})`,
+        )
+      }
       console.log(`Loaded every chat: ~${summary.estimatedTokens} tokens`)
       console.log(`System: ${summary.system.join(', ') || '(none)'}`)
       console.log(`Reference: ${summary.references.join(', ') || '(none)'}`)
@@ -492,6 +521,120 @@ function main(argv: string[]): void {
         throw new Error('remote takes set <url>, unset, status, push, or pull.')
       }
       return
+    }
+    case 'shared': {
+      const [action, target] = rest
+      const settings = loadSettings()
+      if (
+        action === undefined ||
+        action === 'status' ||
+        action === 'inspect' ||
+        action === 'provenance'
+      ) {
+        const inspection = inspectSharedSource(settings.sharedRead, memoryRoot)
+        const proposals = listProposals(memoryRoot, settings.sharedRead.sourceRoot)
+        const statusReport = {
+          enabled: settings.sharedRead.enabled,
+          sourceRoot: settings.sharedRead.sourceRoot,
+          sharedOwner: FIXED_SHARED_OWNER,
+          valid: inspection.valid,
+          pinnedSha: inspection.pinnedSha,
+          diagnostics: inspection.diagnostics,
+          contentLoaded: Boolean(inspection.document),
+          pendingProposals: proposals.length,
+        }
+        if (values.json) {
+          console.log(JSON.stringify(statusReport, null, 2))
+        } else {
+          console.log(`Shared mode: ${statusReport.enabled ? 'enabled' : 'disabled (default)'}`)
+          console.log(`Source root: ${statusReport.sourceRoot || '(none)'}`)
+          console.log(`Shared owner: ${statusReport.sharedOwner}`)
+          console.log(`Pinned revision: ${statusReport.pinnedSha || 'none'}`)
+          console.log(`Content loaded: ${statusReport.contentLoaded ? 'yes' : 'no'}`)
+          console.log(`Pending proposals: ${statusReport.pendingProposals}`)
+          if (statusReport.diagnostics.length > 0) {
+            console.log(`Diagnostics:\n  ${statusReport.diagnostics.join('\n  ')}`)
+          }
+        }
+        return
+      }
+      if (action === 'proposals' || action === 'list') {
+        const proposals = listProposals(memoryRoot, settings.sharedRead.sourceRoot)
+        if (values.json) {
+          console.log(JSON.stringify(proposals, null, 2))
+        } else {
+          if (proposals.length === 0) {
+            console.log('No pending proposals.')
+          } else {
+            console.log(`Pending proposals (${proposals.length}):`)
+            for (const prop of proposals) {
+              const stale = prop.isStale ? ' [STALE BASE]' : ''
+              console.log(
+                `- ${prop.id} (${prop.createdAt.slice(0, 10)}) [${prop.operation}] ${prop.targetPath} base:${prop.sourceSha?.slice(0, 8) || 'none'}${stale}`,
+              )
+            }
+          }
+        }
+        return
+      }
+      if (action === 'show') {
+        if (!target) throw new Error('shared show needs a proposal ID.')
+        const proposal = getProposal(memoryRoot, target, settings.sharedRead.sourceRoot)
+        if (!proposal) throw new Error(`Proposal not found: ${target}`)
+        if (values.json) {
+          console.log(JSON.stringify(proposal, null, 2))
+        } else {
+          console.log(exportProposal(memoryRoot, proposal.id, settings.sharedRead.sourceRoot))
+        }
+        return
+      }
+      if (action === 'export') {
+        if (!target) throw new Error('shared export needs a proposal ID.')
+        const exported = exportProposal(memoryRoot, target, settings.sharedRead.sourceRoot)
+        if (values.out) {
+          const outFile = path.resolve(values.out)
+          fs.writeFileSync(outFile, exported, 'utf-8')
+          console.log(`Exported proposal ${target} to ${outFile}`)
+        } else {
+          process.stdout.write(exported)
+        }
+        return
+      }
+      if (action === 'enable') {
+        const sourcePath = values.source || target
+        const currentSettings = loadSettings()
+        const updated = {
+          ...currentSettings,
+          sharedRead: {
+            ...currentSettings.sharedRead,
+            enabled: true,
+            sourceRoot: sourcePath
+              ? path.resolve(sourcePath)
+              : currentSettings.sharedRead.sourceRoot,
+          },
+        }
+        saveSettings(getSettingsPath(), updated)
+        console.log(
+          `Shared read mode enabled (sourceRoot: ${updated.sharedRead.sourceRoot || 'not set'}).`,
+        )
+        return
+      }
+      if (action === 'disable' || action === 'off') {
+        const currentSettings = loadSettings()
+        const updated = {
+          ...currentSettings,
+          sharedRead: {
+            ...currentSettings.sharedRead,
+            enabled: false,
+          },
+        }
+        saveSettings(getSettingsPath(), updated)
+        console.log('Shared read mode disabled.')
+        return
+      }
+      throw new Error(
+        `Unknown shared action: ${action}. Use status, proposals, show, export, enable, or disable.`,
+      )
     }
     default:
       throw new Error(`Unknown command: ${command}\n\n${USAGE}`)
