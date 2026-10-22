@@ -4,7 +4,10 @@ import * as path from 'node:path'
 export const quoteShellArgument = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
 
 /** Read only our literal Node invocation shapes; never evaluate shell input. */
-export const nodeScriptPath = (command: string, marker: string): string | null => {
+export const parseNodeCommand = (
+  command: string,
+  marker: string,
+): { node: string; script: string } | null => {
   const literal = command.endsWith(marker) ? command.slice(0, -marker.length) : command
   const words: string[] = []
   let word = ''
@@ -38,14 +41,17 @@ export const nodeScriptPath = (command: string, marker: string): string | null =
   if (quote) return null
   if (active) words.push(word)
   if (!words.length || path.basename(words[0]) !== 'node') return null
-  const args = words.slice(1)
-  if (args.length === 1 && path.isAbsolute(args[0])) return args[0]
+  const [node, ...args] = words
+  if (args.length === 1 && path.isAbsolute(args[0])) return { node, script: args[0] }
   if (
     args.length === 3 &&
     args[0] === '--experimental-strip-types' &&
     args[1] === '--disable-warning=ExperimentalWarning' &&
     path.isAbsolute(args[2])
   )
-    return args[2]
+    return { node, script: args[2] }
   return null
 }
+
+export const nodeScriptPath = (command: string, marker: string): string | null =>
+  parseNodeCommand(command, marker)?.script ?? null

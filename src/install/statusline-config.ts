@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { nodeScriptPath, quoteShellArgument } from './shell.ts'
+import { nodeScriptPath, parseNodeCommand, quoteShellArgument } from './shell.ts'
 
 export type StatusLineConfig = {
   type: 'command'
@@ -38,6 +38,13 @@ export const isOwnedStatusLine = (value: unknown, expectedCommands: string[] = [
     OWNED_STATUSLINE.test(script) ||
     expectedCommands.some((command) => nodeScriptPath(command, STATUSLINE_MARKER) === script)
   )
+}
+
+export const statusLineNodePath = (value: unknown): string | null => {
+  const command = (value as StatusLineConfig | null)?.command
+  return typeof command === 'string'
+    ? (parseNodeCommand(command, STATUSLINE_MARKER)?.node ?? null)
+    : null
 }
 
 export function buildStatusLine(

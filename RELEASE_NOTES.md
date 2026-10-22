@@ -1,16 +1,12 @@
-# v0.2.0 — Optional Shared Communication
+# v0.2.1 — Upgrade-Safe Node Path
 
 Publication status is owned by GitHub Releases.
 
-- Adds an opt-in committed Git communication baseline with explicit root, one pinned revision per view, and source-aware references.
-- Works normally without Letta. Optional sharing accepts any distinct Git repository containing committed `system/human/prefs/communication.md`; no Letta account, service, or runtime is required.
-- Keeps native persona, routing, project memory, recall, and unrelated learning independent.
-- Preserves tested nested parent/child lists and native paragraph introductions; deduplicates imported clauses without silently dropping tested native additions.
-- Diverts shared-owner updates into private pending proposals, including `--force`; source application remains a separate human/source-owner approval.
-- Guards direct writes, deletes, commits, repair, and Dream batches, with a monotonic runtime policy floor.
+- Install now writes a Homebrew launcher (`bin/node`, or `opt/<formula>/bin/node` for keg-only formulas) instead of the versioned Cellar binary, when that launcher resolves to the same Node. A Homebrew Node upgrade no longer silently breaks every memory hook and the status line.
+- Adds `CURSOR_MEMORY_NODE` to choose the Node used by hooks and the status line, for version managers such as nvm that have no stable launcher. It must be an existing absolute path named `node`.
+- `cursor-memory doctor` now reports an error when the Node binary used by an installed hook or the status line is missing or not executable, and names what cannot run.
+- Ownership detection is unchanged: existing installs, including ones pointing at a removed Node, are still recognized and replaced in place by `pnpm memory:install`.
 
-Verification: `pnpm check`, 113 tests, independent structural/proposal probes, fresh interactive Opus5.5Medium host, and actual disable/re-enable with native memory invariance. Generic-source inspection passed without Letta integration calls.
+Verification: `pnpm check` and 119 tests with an isolated `CURSOR_HOME`/`CURSOR_MEMORY_SETTINGS`. On a live install the resolver mapped `/opt/homebrew/Cellar/node/26.12.0/bin/node` to `/opt/homebrew/bin/node`, and doctor reported no install findings.
 
-Sharing is disabled by default. Enable with `cursor-memory shared enable --source /absolute/path/to/shared-git-repo`; inspect with `cursor-memory shared status`. See README for source requirements and proposal commands.
-
-This shares communication only, not chat/task state or the whole memory corpus. Structural reconciliation is not universal semantic reasoning, cooperative write guards are not an OS sandbox, and local Git does not keep provider-bound model context offline.
+Existing installs pinned to a Cellar path keep that path until `pnpm memory:install` is run again.

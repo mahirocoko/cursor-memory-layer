@@ -58,7 +58,7 @@ pnpm memory:install
 This:
 
 - creates `~/.cursor/memory` if missing;
-- merges the hooks into `~/.cursor/hooks.json` (other hooks are kept; the previous file is saved as `hooks.json.cursor-memory.bak`);
+- merges the hooks into `~/.cursor/hooks.json` (other hooks are kept; the previous file is saved as `hooks.json.cursor-memory.bak`). Hooks and the status line run the Node that ran the install; a Homebrew Cellar binary is swapped for its `bin/node` or `opt/<formula>/bin/node` launcher so upgrades do not break them. Version managers such as nvm have no such launcher; set `CURSOR_MEMORY_NODE` to an absolute `node` path to choose one, and `cursor-memory doctor` reports a binary that has since disappeared;
 - installs the skill at `~/.cursor/skills/cursor-memory/` with a hash receipt; foreign, symlinked, or locally modified entries are left alone. The exact current source or the hash-pinned pre-receipt entry from `f21fc28` can be adopted. Companion files are never owned or removed;
 - copies slash commands to `~/.cursor/commands/` (an existing command file that is not ours is left alone);
 - sets `statusLine` in `~/.cursor/cli-config.json` and nothing else there, saving the previous value to `cli-config.statusline.pre-cursor-memory.json`. It never creates `cli-config.json`; run `cursor-agent` once first. Skip with `pnpm memory:install --no-statusline`;

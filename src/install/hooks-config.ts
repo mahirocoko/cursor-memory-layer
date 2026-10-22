@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import { nodeScriptPath, quoteShellArgument } from './shell.ts'
+import { nodeScriptPath, parseNodeCommand, quoteShellArgument } from './shell.ts'
 
 export type HookEntry = {
   command: string
@@ -27,6 +27,11 @@ export const isOwnedHook = (entry: HookEntry, expectedCommands: string[] = []): 
     expectedCommands.some((command) => nodeScriptPath(command, HOOK_MARKER) === script)
   )
 }
+
+export const hookNodePath = (entry: HookEntry): string | null =>
+  typeof entry.command === 'string'
+    ? (parseNodeCommand(entry.command, HOOK_MARKER)?.node ?? null)
+    : null
 
 export function buildOwnedHooks(
   repoRoot: string,

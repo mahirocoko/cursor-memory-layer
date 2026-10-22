@@ -2,13 +2,14 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { install } from '../src/install/installer.ts'
+import { stableNodePath } from '../src/install/node-path.ts'
 import { getCursorHome, getMemoryRoot } from '../src/memory/config.ts'
 
 const report = install({
   repoRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   cursorHome: getCursorHome(),
   memoryRoot: getMemoryRoot(),
-  nodePath: process.execPath,
+  nodePath: stableNodePath(process.execPath, process.env.CURSOR_MEMORY_NODE),
   binDir: process.env.CURSOR_MEMORY_BIN_DIR || path.join(os.homedir(), '.local', 'bin'),
   statusLine: !process.argv.includes('--no-statusline'),
 })

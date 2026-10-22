@@ -9,8 +9,12 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { resolveAgentCommand } from '../dream/runner.ts'
 import { isBackedOff, isDreamLocked, readDreamLog, readDreamState } from '../dream/state.ts'
-import { type HooksConfig, isOwnedHook } from '../install/hooks-config.ts'
-import { isOwnedStatusLine, readCliConfig } from '../install/statusline-config.ts'
+import { type HooksConfig, hookNodePath, isOwnedHook } from '../install/hooks-config.ts'
+import {
+  isOwnedStatusLine,
+  readCliConfig,
+  statusLineNodePath,
+} from '../install/statusline-config.ts'
 import {
   estimateTokens,
   SYSTEM_DOCUMENT_WARN_CHARS,
@@ -265,6 +269,37 @@ function checkReflection(memoryRoot: string, findings: DoctorFinding[]) {
   })
 }
 
+const isExecutable = (file: string): boolean => {
+  try {
+    fs.accessSync(file, fs.constants.X_OK)
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+/** Cursor gives no error when a hook's Node binary is gone; the hook just stops running. */
+function checkNodeBinaries(config: HooksConfig, statusLine: unknown, findings: DoctorFinding[]) {
+  const users = new Map<string, string[]>()
+  const use = (node: string | null, user: string) => {
+    if (node && path.isAbsolute(node)) users.set(node, [...(users.get(node) || []), user])
+  }
+  for (const [event, entries] of Object.entries(config.hooks || {})) {
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      if (isOwnedHook(entry)) use(hookNodePath(entry), `${event} hook`)
+    }
+  }
+  if (isOwnedStatusLine(statusLine)) use(statusLineNodePath(statusLine), 'status line')
+  for (const [node, usedBy] of users) {
+    if (isExecutable(node)) continue
+    findings.push({
+      level: 'error',
+      check: 'install',
+      detail: `${node} is missing or not executable, so these cannot run: ${usedBy.join(', ')}. A Node upgrade usually removes the old binary; run \`pnpm memory:install\` again.`,
+    })
+  }
+}
+
 function checkInstall(memoryRoot: string, cursorHome: string, findings: DoctorFinding[]) {
   const hooksFile = path.join(cursorHome, 'hooks.json')
   let config: HooksConfig = {}
@@ -300,6 +335,7 @@ function checkInstall(memoryRoot: string, cursorHome: string, findings: DoctorFi
       ? 'The CLI status line shows memory state (🧠).'
       : 'The CLI status line is not ours (optional; `pnpm memory:install` sets it).',
   })
+  checkNodeBinaries(config, statusLine, findings)
   const remote = getRemoteStatus(memoryRoot)
   const lastPush = remote.recentLog.at(-1)
   findings.push({
